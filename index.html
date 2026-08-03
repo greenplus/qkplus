@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>素数大富豪＋ 新UI β版</title>
+    <link rel="stylesheet" href="./client-common/styles.css?v=shared-20260803-1" />
+    <link rel="stylesheet" href="./theme.css?v=plus-20260803-1" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section id="topBand" class="top-band">
+        <div>
+          <h1>素数大富豪＋ 新UI β版</h1>
+          <p class="lead">
+            いつもの素数大富豪と特殊ルールを、見やすい共通操作で遊べる対戦UIです。
+          </p>
+        </div>
+        <div class="connection-card">
+          <span id="connectionDot" class="dot"></span>
+          <div>
+            <strong id="connectionLabel">接続準備中</strong>
+            <p id="serverLabel">既存サーバーに接続します</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="setupPanel" class="setup-grid">
+        <div class="panel intro-panel">
+          <h2>はじめる</h2>
+          <label class="field-label" for="nameInput">表示名</label>
+          <div class="name-row">
+            <input id="nameInput" maxlength="24" autocomplete="nickname" placeholder="例: マグロ" />
+            <button id="randomNameBtn" class="ghost-button" type="button">おまかせ</button>
+          </div>
+          <div class="room-group-choice" role="group" aria-label="ルールカテゴリ選択">
+            <button id="roomGroupPrimaryBtn" class="room-group-choice-card active" type="button" aria-pressed="true">
+              <span>Classic</span>
+              <strong>いつもの素数大富豪</strong>
+              <small>手札枚数・ペナルティ別の6部屋</small>
+            </button>
+            <button id="roomGroupSecondaryBtn" class="room-group-choice-card" type="button" aria-pressed="false">
+              <span>Plus</span>
+              <strong>特殊ルール</strong>
+              <small>初期革命・四つ子素数・半素数</small>
+            </button>
+          </div>
+          <div class="room-picker">
+            <div class="room-picker-heading">
+              <strong>部屋を選ぶ</strong>
+              <small id="roomPickerHint">Classicの入室人数</small>
+            </div>
+            <div id="roomList" class="room-list" role="radiogroup" aria-label="Classicの部屋選択"></div>
+          </div>
+          <a class="campaign-inline-link" data-feature="campaign" href="#">
+            CPU勝利数キャンペーンの詳細・ランキングを見る →
+          </a>
+          <p class="neo-note">ClassicとPlus専用です。NEOの登録・アシスト機能は使用しません。</p>
+          <div class="action-stack">
+            <button id="practiceBtn" class="primary-button" type="button" disabled>入室する</button>
+          </div>
+          <p class="microcopy">
+            部屋ごとのルールはサーバーが判定します。遊びたいカテゴリと部屋を選んで入室してください。
+          </p>
+        </div>
+
+        <div class="panel guide-panel">
+          <h2>遊び方</h2>
+          <ol class="plain-steps">
+            <li>手札を並べて素数を作り、先に手札を0枚にしたら勝ち</li>
+            <li>場と同じ枚数で、場より大きい数を出します</li>
+            <li>Classicは手札枚数やペナルティの違う部屋から選べます</li>
+            <li>Plusでは初期革命・四つ子素数・半素数を自動判定します</li>
+          </ol>
+          <div class="mini-rules">
+            <span>A=1 / T=10 / J=11 / Q=12 / K=13</span>
+            <span>出せなければドローかパス</span>
+            <span>初めてならClassicの5枚または7枚がおすすめ</span>
+          </div>
+          <a class="secondary-button help-button" href="https://greenplus.github.io/primeqk_online/" target="_blank" rel="noopener">
+            素数大富豪の詳細ルールを見る
+          </a>
+        </div>
+      </section>
+
+      <section id="roomPanel" class="room-layout hidden">
+        <aside class="side-column">
+          <div class="panel status-panel">
+            <div class="room-title-row">
+              <div>
+                <p id="roomBadge" class="eyebrow">5枚 / ペナルティ1枚</p>
+                <h2 id="roomHeading">Classicルーム 1</h2>
+              </div>
+              <div class="room-title-actions">
+                <button
+                  id="soundToggleBtn"
+                  class="ghost-button compact icon-button sound-toggle"
+                  type="button"
+                  aria-label="効果音をオンにする"
+                  aria-pressed="false"
+                  title="効果音：オフ"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 9h4l5-4v14l-5-4H4z"></path>
+                    <path class="sound-wave" d="M16 9.5a4 4 0 0 1 0 5"></path>
+                    <path class="sound-wave" d="M18.5 7a7.5 7.5 0 0 1 0 10"></path>
+                    <path class="sound-slash" d="M3 3l18 18"></path>
+                  </svg>
+                </button>
+                <button id="leaveBtn" class="ghost-button compact" type="button">退室</button>
+              </div>
+            </div>
+            <div id="nextHint" class="next-hint">まずはサンプル登録を読み込みます。</div>
+            <dl class="status-list">
+              <div>
+                <dt>状態</dt>
+                <dd id="playStatus">観戦中</dd>
+              </div>
+              <div>
+                <dt>参加</dt>
+                <dd id="playerList">読み込み中</dd>
+              </div>
+              <div>
+                <dt>観戦</dt>
+                <dd id="watcherList" class="watcher-list" tabindex="0" aria-label="観戦者一覧">なし</dd>
+              </div>
+            </dl>
+            <div class="button-row">
+              <button id="readyBtn" class="secondary-button" type="button">対戦に参加</button>
+              <button id="addCpuBtn" class="ghost-button" type="button">CPU追加</button>
+              <button id="startBtn" class="primary-button" type="button">開始</button>
+            </div>
+            <div id="cpuChooser" class="cpu-chooser hidden">
+              <div class="cpu-chooser-heading">
+                <label for="cpuProfileSelect">対戦するCPU</label>
+                <button id="cpuChooserCloseBtn" class="ghost-button compact" type="button">閉じる</button>
+              </div>
+              <select id="cpuProfileSelect" class="full-select"></select>
+              <p id="cpuProfileDescription" class="cpu-profile-description"></p>
+              <button id="confirmCpuBtn" class="secondary-button" type="button">このCPUを追加</button>
+            </div>
+          </div>
+
+          <details id="registerPanel" class="panel register-panel" data-feature="registration">
+            <summary>登録リスト</summary>
+            <p class="register-help-copy">
+              素数は空白・改行・カンマ区切り、合成数は
+              <code>12=2*2*3</code> の形式で入力します。サンプルのままでも遊べます。
+              <a class="text-link" href="https://greenplus.github.io/primeqk_online/" target="_blank" rel="noopener">登録方法を詳しく見る</a>
+            </p>
+            <p id="registerLimitNote" class="register-limit-note">初級は素数・合成数あわせて500件まで登録できます。</p>
+            <select id="sampleSelect" class="full-select"></select>
+            <textarea id="primeText" rows="6" spellcheck="false" placeholder="登録素数"></textarea>
+            <textarea id="compositeText" rows="4" spellcheck="false" placeholder="登録合成数"></textarea>
+            <div class="button-row">
+              <button id="sampleBtn" class="ghost-button compact" type="button">サンプル読込</button>
+              <button id="saveRegisterBtn" class="secondary-button" type="button">登録する</button>
+              <span id="registerStatus" class="small-status">未登録</span>
+            </div>
+          </details>
+        </aside>
+
+        <section class="game-column">
+          <div class="field-strip">
+            <div class="metric">
+              <span>山札</span>
+              <strong id="deckCount">-</strong>
+            </div>
+            <div id="myHandMetric" class="metric">
+              <span id="myHandLabel">手札</span>
+              <strong id="myHandCount">0</strong>
+            </div>
+            <div id="opponentMetric" class="metric">
+              <span id="opponentLabel">相手</span>
+              <strong id="opponentCounts">-</strong>
+            </div>
+            <div id="fieldZone" class="field-zone">
+              <h2 class="game-section-title">場：<span id="fieldNumber">なし</span></h2>
+              <div id="fieldCards" class="field-cards empty">まだ何も出ていません</div>
+            </div>
+          </div>
+
+          <div class="play-area">
+            <section class="hand-panel">
+              <div class="panel-heading-row">
+                <h2 class="game-section-title">手札</h2>
+                <div class="hand-heading-status">
+                  <span id="remainingFinishNotice" class="remaining-finish-notice hidden">残り上がりあり</span>
+                  <span id="turnBadge" class="turn-badge">待機中</span>
+                </div>
+              </div>
+              <div id="handCards" class="card-row empty-row">ゲーム開始後に表示されます</div>
+            </section>
+
+            <section class="selected-panel">
+              <div class="panel-heading-row">
+                <h2 id="selectedTitle" class="game-section-title">選択中: なし</h2>
+                <button id="clearSelectionBtn" class="ghost-button compact" type="button">クリア</button>
+              </div>
+              <div id="selectedCards" class="card-row empty-row">未選択</div>
+              <div id="jokerControls" class="joker-controls"></div>
+              <div class="button-row action-row">
+                <button id="playBtn" class="primary-button" type="button">出す</button>
+                <button id="compositeModeBtn" class="secondary-button" type="button">合成数出し</button>
+                <button id="drawBtn" class="secondary-button" type="button">ドロー</button>
+                <button id="passBtn" class="ghost-button" type="button">パス</button>
+              </div>
+            </section>
+
+            <section id="compositePanel" class="composite-panel hidden">
+              <div class="panel-heading-row">
+                <h2 id="compositeTitle" class="game-section-title">素因数場</h2>
+                <div class="button-row compact-ops">
+                  <button id="compositeMulBtn" class="ghost-button compact" type="button">×</button>
+                  <button id="compositePowBtn" class="ghost-button compact" type="button">^</button>
+                  <button id="compositeClearBtn" class="ghost-button compact" type="button">解除</button>
+                </div>
+              </div>
+              <div id="compositeCards" class="card-row empty-row">手札から材料札を選んでください</div>
+              <div id="compositeJokerControls" class="joker-controls"></div>
+            </section>
+
+            <section class="assist-panel" data-feature="assist">
+              <div class="panel-heading-row">
+                <h2 class="game-section-title">候補</h2>
+                <div class="assist-actions">
+                  <button id="assistRecommendedBtn" class="filter-chip active" type="button">おすすめ</button>
+                  <button id="assistStrongBtn" class="filter-chip" type="button">強い順</button>
+                  <button id="assistEasyBtn" class="filter-chip" type="button">弱い順</button>
+                  <button id="assistRestBtn" class="filter-chip" type="button">残り</button>
+                  <button id="assistManyBtn" class="filter-chip hidden" type="button">増やす</button>
+                </div>
+              </div>
+              <div id="assistList" class="assist-list empty">
+                ゲームが始まると、ここに「押せば選べる」候補が出ます。
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <aside class="log-column">
+          <div class="panel log-panel">
+            <div class="chat-title-row">
+              <h2 class="game-section-title">チャット</h2>
+              <div class="chat-tabs" role="tablist" aria-label="チャットの範囲">
+                <button id="roomChatTab" class="chat-tab active" type="button" role="tab" aria-selected="true" aria-controls="roomLogBox">
+                  部屋
+                </button>
+                <button id="globalChatTab" class="chat-tab" data-feature="globalChat" type="button" role="tab" aria-selected="false" aria-controls="globalLogBox">
+                  グローバル
+                  <span id="globalUnreadBadge" class="chat-unread hidden" aria-label="未読メッセージ"></span>
+                </button>
+              </div>
+            </div>
+            <div id="globalChatGate" class="global-chat-gate hidden" data-feature="globalChat">
+              <strong>NEO全体に公開されるチャットです</strong>
+              <p>
+                すべての部屋でグローバル表示を選んだ人に、表示名・現在の部屋・発言が見えます。
+                個人情報や連絡先は書き込まないでください。切り替える前の発言は表示されません。
+              </p>
+              <button id="enableGlobalChatBtn" class="secondary-button compact" type="button">
+                注意事項を確認して表示する
+              </button>
+            </div>
+            <div id="globalQuickMessages" class="global-quick-messages hidden" data-feature="globalChat" aria-label="募集定型文">
+              <span>募集に使える定型文</span>
+              <div class="global-template-list">
+                <button type="button" data-global-template="recruit">対戦募集</button>
+                <button type="button" data-global-template="beginner_welcome">初心者歓迎</button>
+                <button type="button" data-global-template="spectators_welcome">観戦歓迎</button>
+              </div>
+            </div>
+            <div id="chatComposer" class="chat-row">
+              <input id="chatInput" maxlength="120" autocomplete="off" placeholder="部屋へのメッセージ" />
+              <button id="chatBtn" class="ghost-button compact" type="button">送信</button>
+            </div>
+            <div id="roomLogBox" class="log-box" role="tabpanel" aria-labelledby="roomChatTab"></div>
+            <div id="globalLogBox" class="log-box global-log-box hidden" data-feature="globalChat" role="tabpanel" aria-labelledby="globalChatTab"></div>
+          </div>
+        </aside>
+      </section>
+      <footer class="site-footer">
+        <a href="https://greenplus.github.io/">green+の無人島</a>
+      </footer>
+    </main>
+
+    <dialog id="campaignResultDialog" class="campaign-result-dialog" data-feature="campaign">
+      <div class="campaign-result-card">
+        <button id="campaignDialogCloseBtn" class="dialog-close-button" type="button" aria-label="閉じる">×</button>
+        <p class="eyebrow">CPU勝利数キャンペーン</p>
+        <h2 id="campaignResultTitle">勝利を記録しました</h2>
+        <p id="campaignResultMessage" class="campaign-result-message"></p>
+        <div class="campaign-result-actions">
+          <a id="campaignShareBtn" class="primary-button link-button" href="#" target="_blank" rel="noopener">
+            Xでシェア
+          </a>
+          <a id="campaignResultPageLink" class="secondary-button link-button" href="#">
+            ゲージとランキングを見る
+          </a>
+        </div>
+      </div>
+    </dialog>
+
+    <script src="./product-config.js?v=plus-20260803-1"></script>
+    <script src="./client-common/app.js?v=shared-20260803-1"></script>
+  </body>
+</html>
