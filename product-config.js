@@ -15,7 +15,7 @@ window.PRIMEQK_CLIENT_CONFIG = {
     },
     plus: {
       label: "Plus",
-      roomKeys: ["plus1", "plus2", "plus3"],
+      roomKeys: ["plus1", "plus2", "plus3", "plusTournament"],
     },
   },
   rooms: {
@@ -100,6 +100,16 @@ window.PRIMEQK_CLIENT_CONFIG = {
       summary: "11枚 / 通常",
       badge: "半素数 / 11枚 / 通常",
     },
+    plusTournament: {
+      roomId: "plus_tournament_1",
+      roomGroupKey: "plus",
+      roomNumber: "大会",
+      label: "Plus",
+      title: "定期大会",
+      summary: "日程・ルールは大会ごとに設定",
+      badge: "システム進行の定期大会",
+      tournament: true,
+    },
   },
   defaultSampleKey: "",
   features: {
@@ -108,5 +118,6 @@ window.PRIMEQK_CLIENT_CONFIG = {
     hnpChallenge: false,
     campaign: false,
     globalChat: false,
+    tournament: true,
   },
 };

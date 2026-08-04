@@ -42,7 +42,7 @@
             <button id="roomGroupSecondaryBtn" class="room-group-choice-card" type="button" aria-pressed="false">
               <span>Plus</span>
               <strong>特殊ルール</strong>
-              <small>初期革命・四つ子素数・半素数</small>
+              <small>初期革命・四つ子素数・半素数・定期大会</small>
             </button>
           </div>
           <div class="room-picker">
@@ -139,6 +139,32 @@
               <p id="cpuProfileDescription" class="cpu-profile-description"></p>
               <button id="confirmCpuBtn" class="secondary-button" type="button">このCPUを追加</button>
             </div>
+          </div>
+
+          <div id="tournamentPanel" class="panel tournament-panel" data-feature="tournament">
+            <div class="tournament-heading">
+              <div>
+                <p class="eyebrow">SYSTEM TOURNAMENT</p>
+                <h2 id="tournamentTitle">定期大会</h2>
+              </div>
+              <span id="tournamentStatusBadge" class="tournament-status-badge">未開催</span>
+            </div>
+            <p id="tournamentSchedule" class="tournament-schedule">次回日程は未設定です。</p>
+            <p id="tournamentMessage" class="tournament-message">
+              大会ルームを選ぶと、参加登録と進行状況を確認できます。
+            </p>
+            <div class="button-row tournament-actions">
+              <button id="tournamentRegisterBtn" class="primary-button" type="button">大会に参加登録</button>
+              <button id="tournamentWithdrawBtn" class="ghost-button" type="button">参加取消</button>
+            </div>
+            <div id="tournamentPairing" class="tournament-pairing hidden"></div>
+            <div class="tournament-standings-wrap">
+              <strong>順位</strong>
+              <ol id="tournamentStandings" class="tournament-standings"></ol>
+            </div>
+            <p class="microcopy">
+              復帰トークンはこのブラウザだけに保存します。共有端末では大会後に参加取消してください。
+            </p>
           </div>
 
           <details id="registerPanel" class="panel register-panel" data-feature="registration">
