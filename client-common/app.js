@@ -19,6 +19,7 @@ const CONFIG = {
     campaign: false,
     globalChat: false,
     tournament: false,
+    recruitment: false,
     ...(PRODUCT_CONFIG.features || {}),
   },
   roomGroupOrder,
@@ -31,6 +32,8 @@ const LEGACY_ROOM_SESSION_TOKEN_KEY = "prime-daifugo-" + CONFIG.productKey + "-r
 const ROOM_SESSION_TOKEN_KEY = LEGACY_ROOM_SESSION_TOKEN_KEY + "-v2";
 const GUEST_MODE_KEY = "prime-daifugo-" + CONFIG.productKey + "-guest-mode";
 const GUEST_NAME_KEY = "prime-daifugo-" + CONFIG.productKey + "-guest-name";
+const RECRUITMENT_OWNER_KEY = "prime-daifugo-" + CONFIG.productKey + "-recruitment-owner";
+const RECRUITMENT_GUEST_OWNER_KEY = RECRUITMENT_OWNER_KEY + "-guest";
 const PLAYER_JOINED_SOUND_URL = "./assets/sounds/player-joined.mp3";
 let playerJoinedAudio = null;
 let soundUnlockPromise = null;
@@ -58,6 +61,10 @@ const state = {
   roomCountsLoaded: false,
   roomCountsTimer: null,
   reconnectTimer: null,
+  recruitments: [],
+  recruitmentMaxCount: 5,
+  recruitmentSubmitPending: false,
+  recruitmentOwnerTokens: { main: "", guest: "" },
   playingDisconnectGraceSeconds: 60,
   waitingDisconnectGraceSeconds: 180,
   roomRules: {},
@@ -120,6 +127,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initializeIdentityForm();
   bindEvents();
   setRandomNameIfEmpty();
+  initializeRecruitmentForm();
   connect();
   if (CONFIG.features.tournament) {
     state.tournamentCountdownTimer = window.setInterval(renderTournamentCallCountdown, 1000);
@@ -209,6 +217,8 @@ function toggleGuestMode() {
   state.playerName = el.nameInput.value;
   updateIdentityModeUi();
   setRandomNameIfEmpty();
+  if (el.recruitmentName) el.recruitmentName.value = el.nameInput.value.trim();
+  requestRecruitments();
   renderAll();
 }
 
@@ -236,6 +246,14 @@ function bindElements() {
     "roomPickerHint",
     "roomList",
     "practiceBtn",
+    "recruitmentCount",
+    "recruitmentList",
+    "recruitmentForm",
+    "recruitmentTime",
+    "recruitmentName",
+    "recruitmentRule",
+    "recruitmentSubmitBtn",
+    "recruitmentStatus",
     "soundToggleBtn",
     "leaveBtn",
     "roomBadge",
@@ -340,6 +358,11 @@ function bindEvents() {
     if (roomButton) selectRoom(roomButton.dataset.roomKey);
   });
   el.practiceBtn.addEventListener("click", () => startFlow("enter"));
+  if (el.recruitmentForm) el.recruitmentForm.addEventListener("submit", createRecruitment);
+  if (el.recruitmentList) el.recruitmentList.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-delete-recruitment]");
+    if (button) deleteRecruitment(button.dataset.deleteRecruitment);
+  });
   el.soundToggleBtn.addEventListener("click", toggleSound);
   el.leaveBtn.addEventListener("click", leaveRoom);
   el.readyBtn.addEventListener("click", toggleReady);
@@ -462,6 +485,7 @@ function connect() {
     state.connected = true;
     setConnection("online", "接続済み", `${CONFIG.lobbyName} / ${Object.keys(CONFIG.rooms).length}部屋`);
     send({ type: "get_room_counts" });
+    requestRecruitments();
     if (state.roomJoined) {
       send({ type: "set_name", name: state.playerName });
       send({
@@ -472,7 +496,10 @@ function connect() {
     }
     clearInterval(state.roomCountsTimer);
     state.roomCountsTimer = setInterval(() => {
-      if (state.appMode === "setup") send({ type: "get_room_counts" });
+      if (state.appMode === "setup") {
+        send({ type: "get_room_counts" });
+        requestRecruitments();
+      }
     }, 5000);
     renderAll();
   });
@@ -484,6 +511,7 @@ function connect() {
 
   state.ws.addEventListener("close", () => {
     state.connected = false;
+    state.recruitmentSubmitPending = false;
     state.globalChatSubscribed = false;
     state.globalChatJoining = false;
     clearInterval(state.roomCountsTimer);
@@ -536,6 +564,16 @@ function handleMessage(msg) {
       state.assistEnabled = CONFIG.features.assist && !!state.roomAssistEnabled[currentRoomId()];
       state.sampleOptions = msg.registered_sample_options || [];
       renderSampleOptions();
+      break;
+    case "recruitments":
+      state.recruitments = Array.isArray(msg.items) ? msg.items : [];
+      state.recruitmentMaxCount = Number(msg.max_count) || 5;
+      state.recruitmentSubmitPending = false;
+      if (msg.notice) setRecruitmentStatus(msg.notice, "success");
+      break;
+    case "recruitment_error":
+      state.recruitmentSubmitPending = false;
+      setRecruitmentStatus(msg.message || "募集を更新できませんでした。", "error");
       break;
     case "name_set":
       state.playerName = msg.name || state.playerName;
@@ -985,6 +1023,108 @@ function setRandomNameIfEmpty() {
 function setRandomName() {
   el.nameInput.value = randomName();
   persistCurrentName();
+  if (el.recruitmentName) el.recruitmentName.value = state.playerName;
+}
+
+function initializeRecruitmentForm() {
+  if (!CONFIG.features.recruitment || !el.recruitmentForm) return;
+  el.recruitmentName.value = el.nameInput.value.trim();
+  setDefaultRecruitmentTime();
+  updateRecruitmentTimeBounds();
+}
+
+function recruitmentOwnerToken() {
+  const modeKey = state.guestMode ? "guest" : "main";
+  const storageKey = state.guestMode ? RECRUITMENT_GUEST_OWNER_KEY : RECRUITMENT_OWNER_KEY;
+  const storage = state.guestMode ? sessionStorage : localStorage;
+  try {
+    const saved = storage.getItem(storageKey);
+    if (saved && saved.length >= 32) return saved;
+  } catch {}
+  if (!state.recruitmentOwnerTokens[modeKey]) {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    state.recruitmentOwnerTokens[modeKey] = Array.from(
+      bytes,
+      (value) => value.toString(16).padStart(2, "0"),
+    ).join("");
+  }
+  try {
+    storage.setItem(storageKey, state.recruitmentOwnerTokens[modeKey]);
+  } catch {}
+  return state.recruitmentOwnerTokens[modeKey];
+}
+
+function requestRecruitments() {
+  if (!CONFIG.features.recruitment || !state.connected) return;
+  send({ type: "get_recruitments", owner_token: recruitmentOwnerToken() });
+}
+
+function createRecruitment(event) {
+  event.preventDefault();
+  if (!CONFIG.features.recruitment || state.recruitmentSubmitPending) return;
+  const name = el.recruitmentName.value.trim().slice(0, 24);
+  const scheduledAt = new Date(el.recruitmentTime.value);
+  const now = new Date();
+  if (!name) {
+    setRecruitmentStatus("名前を入力してください。", "error");
+    return;
+  }
+  if (Number.isNaN(scheduledAt.getTime()) || scheduledAt <= now) {
+    setRecruitmentStatus("現在より後の集合時間を選んでください。", "error");
+    return;
+  }
+  if (scheduledAt.getTime() > now.getTime() + 24 * 60 * 60 * 1000) {
+    setRecruitmentStatus("集合時間は24時間以内にしてください。", "error");
+    return;
+  }
+  state.recruitmentSubmitPending = true;
+  setRecruitmentStatus("投稿しています…", "");
+  send({
+    type: "create_recruitment",
+    owner_token: recruitmentOwnerToken(),
+    name,
+    rule_key: el.recruitmentRule.value,
+    scheduled_at: scheduledAt.toISOString(),
+  });
+  renderRecruitments();
+}
+
+function deleteRecruitment(recruitmentId) {
+  if (!recruitmentId || !state.connected) return;
+  send({
+    type: "delete_recruitment",
+    owner_token: recruitmentOwnerToken(),
+    recruitment_id: recruitmentId,
+  });
+}
+
+function setDefaultRecruitmentTime() {
+  if (!el.recruitmentTime) return;
+  const date = new Date(Date.now() + 60 * 60 * 1000);
+  date.setSeconds(0, 0);
+  date.setMinutes(Math.ceil(date.getMinutes() / 30) * 30);
+  el.recruitmentTime.value = localDatetimeValue(date);
+}
+
+function updateRecruitmentTimeBounds() {
+  if (!el.recruitmentTime) return;
+  const now = new Date();
+  el.recruitmentTime.min = localDatetimeValue(new Date(now.getTime() + 60 * 1000));
+  el.recruitmentTime.max = localDatetimeValue(new Date(now.getTime() + (24 * 60 - 1) * 60 * 1000));
+}
+
+function localDatetimeValue(date) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+    + `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function setRecruitmentStatus(message, tone = "") {
+  if (!el.recruitmentStatus) return;
+  el.recruitmentStatus.textContent = message;
+  el.recruitmentStatus.classList.toggle("success", tone === "success");
+  el.recruitmentStatus.classList.toggle("error", tone === "error");
 }
 
 function randomName() {
@@ -1330,6 +1470,7 @@ function renderAll() {
   updateIdentityModeUi();
   renderSoundToggle();
   renderRoomChoice();
+  renderRecruitments();
   renderChat();
   el.playStatus.textContent = state.isWaiting
     ? state.roomState === "playing"
@@ -1380,6 +1521,91 @@ function renderAll() {
   renderCompositeZone();
   renderAssist();
   renderTournament();
+}
+
+function renderRecruitments() {
+  if (!CONFIG.features.recruitment || !el.recruitmentList) return;
+  updateRecruitmentTimeBounds();
+  const posts = state.recruitments.filter((post) => {
+    const scheduledAt = new Date(post.scheduled_at);
+    return !Number.isNaN(scheduledAt.getTime()) && scheduledAt > new Date();
+  });
+  el.recruitmentCount.textContent = `${posts.length} / ${state.recruitmentMaxCount}件`;
+  el.recruitmentList.replaceChildren();
+
+  if (!posts.length) {
+    const empty = document.createElement("p");
+    empty.className = "recruitment-empty";
+    empty.textContent = state.connected
+      ? "現在の募集はありません。最初の募集を投稿できます。"
+      : "サーバーへ接続すると募集を表示します。";
+    el.recruitmentList.append(empty);
+  }
+
+  posts.forEach((post) => {
+    const scheduledAt = new Date(post.scheduled_at);
+    const card = document.createElement("article");
+    card.className = "recruitment-card";
+    card.classList.toggle("mine", !!post.can_delete);
+
+    const time = document.createElement("div");
+    time.className = "recruitment-time";
+    const timeLabel = document.createElement("strong");
+    timeLabel.textContent = new Intl.DateTimeFormat("ja-JP", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(scheduledAt);
+    const dateLabel = document.createElement("small");
+    dateLabel.textContent = new Intl.DateTimeFormat("ja-JP", {
+      month: "numeric",
+      day: "numeric",
+      weekday: "short",
+    }).format(scheduledAt);
+    time.append(timeLabel, dateLabel);
+
+    const person = document.createElement("div");
+    person.className = "recruitment-person";
+    const name = document.createElement("strong");
+    name.textContent = post.name || "プレイヤー";
+    const rule = document.createElement("span");
+    rule.className = "recruitment-rule";
+    rule.textContent = post.rule_label || "希望ルール未設定";
+    person.append(name, rule);
+    if (post.can_delete) {
+      const ownerBadge = document.createElement("span");
+      ownerBadge.className = "recruitment-owner-badge";
+      ownerBadge.textContent = "あなたの募集";
+      person.append(ownerBadge);
+    }
+
+    card.append(time, person);
+    if (post.can_delete) {
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "recruitment-delete";
+      deleteButton.dataset.deleteRecruitment = post.id;
+      deleteButton.textContent = "削除";
+      deleteButton.setAttribute("aria-label", `${post.name || "自分"}の募集を削除`);
+      card.append(deleteButton);
+    }
+    el.recruitmentList.append(card);
+  });
+
+  const ownsPost = posts.some((post) => post.can_delete);
+  const boardFull = posts.length >= state.recruitmentMaxCount;
+  el.recruitmentSubmitBtn.disabled = (
+    !state.connected
+    || state.recruitmentSubmitPending
+    || ownsPost
+    || boardFull
+  );
+  el.recruitmentSubmitBtn.textContent = state.recruitmentSubmitPending
+    ? "投稿中…"
+    : ownsPost
+      ? "1件投稿済み"
+      : boardFull
+        ? "現在5件あります"
+        : "募集を投稿";
 }
 
 function renderTournament() {
@@ -2482,7 +2708,9 @@ function logGlobalChat(message) {
   if (message.room_badge) {
     const roomBadge = document.createElement("span");
     roomBadge.className = "global-room-badge";
-    if (["advanced", "neutral"].includes(message.room_tone)) roomBadge.classList.add(message.room_tone);
+    if (["advanced", "classic", "plus", "neutral"].includes(message.room_tone)) {
+      roomBadge.classList.add(message.room_tone);
+    }
     roomBadge.textContent = message.room_badge;
     meta.append(roomBadge);
   }

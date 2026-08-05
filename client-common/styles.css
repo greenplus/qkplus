@@ -366,6 +366,152 @@ textarea,
   gap: 8px;
 }
 
+.recruitment-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.recruitment-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.recruitment-heading h2,
+.recruitment-heading p {
+  margin: 0;
+}
+
+.recruitment-count {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  padding: 6px 10px;
+  color: var(--accent-dark);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.recruitment-intro,
+.recruitment-status,
+.recruitment-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+.recruitment-list {
+  display: grid;
+  gap: 8px;
+}
+
+.recruitment-card {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.75fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #f8fbf9;
+  padding: 11px 12px;
+}
+
+.recruitment-card.mine {
+  border-color: #8fc5aa;
+  background: var(--accent-soft);
+}
+
+.recruitment-time {
+  display: grid;
+  gap: 2px;
+  color: var(--accent-dark);
+}
+
+.recruitment-time strong {
+  font-size: 1rem;
+}
+
+.recruitment-time small,
+.recruitment-rule {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.recruitment-person {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.recruitment-person strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recruitment-owner-badge {
+  color: var(--accent-dark);
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.recruitment-delete {
+  min-height: 34px;
+  border: 1px solid #dfb2ad;
+  border-radius: 7px;
+  background: #fff;
+  padding: 0 10px;
+  color: var(--red);
+  font-weight: 850;
+}
+
+.recruitment-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 9px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.recruitment-form label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.recruitment-form input,
+.recruitment-form select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 10px;
+  color: var(--ink);
+}
+
+.recruitment-form button {
+  min-height: 42px;
+  white-space: nowrap;
+}
+
+.recruitment-status.success {
+  color: var(--accent-dark);
+  font-weight: 750;
+}
+
+.recruitment-status.error {
+  color: var(--red);
+  font-weight: 750;
+}
+
 .room-slot-card {
   display: grid;
   justify-items: center;
@@ -1445,6 +1591,16 @@ body[data-mode="playing"] .side-column {
   color: #4d5778;
 }
 
+.global-room-badge.classic {
+  background: #e9f2fb;
+  color: #285b88;
+}
+
+.global-room-badge.plus {
+  background: #eeeafd;
+  color: #57459a;
+}
+
 .global-room-badge.neutral {
   background: #f0f2f1;
   color: var(--muted);
@@ -1739,6 +1895,19 @@ body[data-mode="playing"] .site-footer {
 }
 
 @media (max-width: 760px) {
+  .recruitment-card {
+    grid-template-columns: minmax(112px, 0.8fr) minmax(0, 1fr);
+  }
+
+  .recruitment-delete {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+
+  .recruitment-form {
+    grid-template-columns: 1fr;
+  }
+
   .room-group-choice-card .campaign-room-period,
   .room-group-choice-card .campaign-room-copy {
     display: none;

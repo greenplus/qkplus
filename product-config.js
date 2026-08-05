@@ -117,7 +117,7 @@ window.PRIMEQK_CLIENT_CONFIG = {
     registration: false,
     hnpChallenge: false,
     campaign: false,
-    globalChat: false,
+    globalChat: true,
     tournament: true,
   },
 };
