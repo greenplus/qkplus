@@ -5,8 +5,8 @@ if (!PRODUCT_CONFIG) {
 }
 
 const roomGroupOrder = PRODUCT_CONFIG.roomGroupOrder || Object.keys(PRODUCT_CONFIG.roomGroups || {});
-if (roomGroupOrder.length !== 2) {
-  throw new Error("the shared lobby currently requires exactly two room groups");
+if (roomGroupOrder.length < 1 || roomGroupOrder.length > 2) {
+  throw new Error("the shared lobby requires one or two room groups");
 }
 
 const CONFIG = {
@@ -20,6 +20,7 @@ const CONFIG = {
     globalChat: false,
     tournament: false,
     recruitment: false,
+    practiceAuth: false,
     ...(PRODUCT_CONFIG.features || {}),
   },
   roomGroupOrder,
@@ -34,7 +35,8 @@ const GUEST_MODE_KEY = "prime-daifugo-" + CONFIG.productKey + "-guest-mode";
 const GUEST_NAME_KEY = "prime-daifugo-" + CONFIG.productKey + "-guest-name";
 const RECRUITMENT_OWNER_KEY = "prime-daifugo-" + CONFIG.productKey + "-recruitment-owner";
 const RECRUITMENT_GUEST_OWNER_KEY = RECRUITMENT_OWNER_KEY + "-guest";
-const PLAYER_JOINED_SOUND_URL = "./assets/sounds/player-joined.mp3";
+const PRACTICE_ACCESS_TOKEN_KEY = "prime-daifugo-" + CONFIG.productKey + "-practice-access-token";
+const PLAYER_JOINED_SOUND_URL = CONFIG.playerJoinedSoundUrl || "./assets/sounds/player-joined.mp3";
 let playerJoinedAudio = null;
 let soundUnlockPromise = null;
 
@@ -117,6 +119,7 @@ const state = {
   startRequestedForFlow: false,
   assistTimer: null,
   assistRequestVersion: 0,
+  practiceAuthorized: !CONFIG.features.practiceAuth,
 };
 
 const el = {};
@@ -128,6 +131,7 @@ document.addEventListener("DOMContentLoaded", () => {
   bindEvents();
   setRandomNameIfEmpty();
   initializeRecruitmentForm();
+  initializePracticeAuth();
   connect();
   if (CONFIG.features.tournament) {
     state.tournamentCountdownTimer = window.setInterval(renderTournamentCallCountdown, 1000);
@@ -141,6 +145,67 @@ function configureProductUi() {
     const enabled = !!CONFIG.features[element.dataset.feature];
     element.classList.toggle("product-disabled", !enabled);
   });
+}
+
+function initializePracticeAuth() {
+  if (!CONFIG.features.practiceAuth) return;
+  const form = document.getElementById("practiceAuthForm");
+  const input = document.getElementById("practiceAccessToken");
+  if (!form || !input) return;
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const token = input.value.trim();
+    if (!token) return;
+    savePracticeAccessToken(token);
+    authorizeCompositePractice(token);
+    updatePracticeAuthUi("認証中…");
+  });
+  updatePracticeAuthUi("");
+}
+
+function readPracticeAccessToken() {
+  try {
+    return sessionStorage.getItem(PRACTICE_ACCESS_TOKEN_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function savePracticeAccessToken(token) {
+  try {
+    sessionStorage.setItem(PRACTICE_ACCESS_TOKEN_KEY, token);
+  } catch {}
+}
+
+function clearPracticeAccessToken() {
+  try {
+    sessionStorage.removeItem(PRACTICE_ACCESS_TOKEN_KEY);
+  } catch {}
+}
+
+function authorizeCompositePractice(token) {
+  send({ type: "authorize_composite_practice", access_token: token });
+}
+
+function updatePracticeAuthUi(message) {
+  const gate = document.getElementById("practiceAuthGate");
+  const status = document.getElementById("practiceAuthStatus");
+  if (gate) gate.classList.toggle("hidden", state.practiceAuthorized);
+  document.body.classList.toggle("practice-locked", !state.practiceAuthorized);
+  if (status) status.textContent = message;
+}
+
+function requestInitialLobbyState() {
+  send({ type: "get_room_counts" });
+  requestRecruitments();
+  if (state.roomJoined) {
+    send({ type: "set_name", name: state.playerName });
+    send({
+      type: "join_room",
+      room_id: currentRoomId(),
+      ...(roomResumeToken(currentRoomId()) ? { resume_token: roomResumeToken(currentRoomId()) } : {}),
+    });
+  }
 }
 
 function readPlayerProfile() {
@@ -352,7 +417,9 @@ function bindEvents() {
   el.nameInput.addEventListener("blur", persistCurrentName);
   el.guestModeToggle.addEventListener("change", toggleGuestMode);
   el.roomGroupPrimaryBtn.addEventListener("click", () => selectRoomGroup(primaryGroupKey));
-  el.roomGroupSecondaryBtn.addEventListener("click", () => selectRoomGroup(secondaryGroupKey));
+  if (secondaryGroupKey) {
+    el.roomGroupSecondaryBtn.addEventListener("click", () => selectRoomGroup(secondaryGroupKey));
+  }
   el.roomList.addEventListener("click", (event) => {
     const roomButton = event.target.closest("[data-room-key]");
     if (roomButton) selectRoom(roomButton.dataset.roomKey);
@@ -484,19 +551,16 @@ function connect() {
   state.ws.addEventListener("open", () => {
     state.connected = true;
     setConnection("online", "接続済み", `${CONFIG.lobbyName} / ${Object.keys(CONFIG.rooms).length}部屋`);
-    send({ type: "get_room_counts" });
-    requestRecruitments();
-    if (state.roomJoined) {
-      send({ type: "set_name", name: state.playerName });
-      send({
-        type: "join_room",
-        room_id: currentRoomId(),
-        ...(roomResumeToken(currentRoomId()) ? { resume_token: roomResumeToken(currentRoomId()) } : {}),
-      });
+    if (CONFIG.features.practiceAuth) {
+      state.practiceAuthorized = false;
+      const accessToken = readPracticeAccessToken();
+      if (accessToken) authorizeCompositePractice(accessToken);
+    } else {
+      requestInitialLobbyState();
     }
     clearInterval(state.roomCountsTimer);
     state.roomCountsTimer = setInterval(() => {
-      if (state.appMode === "setup") {
+      if (state.appMode === "setup" && state.practiceAuthorized) {
         send({ type: "get_room_counts" });
         requestRecruitments();
       }
@@ -514,6 +578,10 @@ function connect() {
     state.recruitmentSubmitPending = false;
     state.globalChatSubscribed = false;
     state.globalChatJoining = false;
+    if (CONFIG.features.practiceAuth) {
+      state.practiceAuthorized = false;
+      updatePracticeAuthUi("");
+    }
     clearInterval(state.roomCountsTimer);
     state.roomCountsTimer = null;
     setConnection("error", "切断されました", "2秒後に自動再接続します");
@@ -538,6 +606,15 @@ function handleMessage(msg) {
   switch (msg.type) {
     case "your_id":
       state.playerId = msg.id;
+      break;
+    case "composite_practice_authorization":
+      state.practiceAuthorized = !!msg.authorized;
+      updatePracticeAuthUi(msg.message || "");
+      if (state.practiceAuthorized) {
+        requestInitialLobbyState();
+      } else {
+        clearPracticeAccessToken();
+      }
       break;
     case "room_counts":
       state.roomCounts = msg.counts || {};
@@ -1906,10 +1983,12 @@ function renderRoomChoice() {
   const roomId = currentRoomId();
   const [primaryGroupKey, secondaryGroupKey] = CONFIG.roomGroupOrder;
 
+  el.roomGroupPrimaryBtn.parentElement.classList.toggle("hidden", !secondaryGroupKey);
+
   el.roomGroupPrimaryBtn.classList.toggle("active", state.selectedRoomGroupKey === primaryGroupKey);
-  el.roomGroupSecondaryBtn.classList.toggle("active", state.selectedRoomGroupKey === secondaryGroupKey);
+  el.roomGroupSecondaryBtn.classList.toggle("active", !!secondaryGroupKey && state.selectedRoomGroupKey === secondaryGroupKey);
   el.roomGroupPrimaryBtn.disabled = state.roomJoined;
-  el.roomGroupSecondaryBtn.disabled = state.roomJoined;
+  el.roomGroupSecondaryBtn.disabled = state.roomJoined || !secondaryGroupKey;
   el.roomGroupPrimaryBtn.setAttribute("aria-pressed", String(state.selectedRoomGroupKey === primaryGroupKey));
   el.roomGroupSecondaryBtn.setAttribute("aria-pressed", String(state.selectedRoomGroupKey === secondaryGroupKey));
   renderRoomList();

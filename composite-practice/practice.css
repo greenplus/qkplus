@@ -1,0 +1,39 @@
+.practice-auth-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(8, 18, 40, 0.92);
+  backdrop-filter: blur(8px);
+}
+
+.practice-auth-gate.hidden {
+  display: none;
+}
+
+.practice-auth-card {
+  width: min(440px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.practice-auth-card h1,
+.practice-auth-card p {
+  margin: 0;
+}
+
+.practice-auth-card input {
+  width: 100%;
+}
+
+body.practice-locked .app-shell {
+  pointer-events: none;
+  user-select: none;
+}

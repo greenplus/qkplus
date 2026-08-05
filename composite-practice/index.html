@@ -3,17 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>素数大富豪＋</title>
-    <link rel="stylesheet" href="./client-common/styles.css?v=shared-45c3968f4e87" />
-    <link rel="stylesheet" href="./theme.css?v=plus-20260805-2" />
+    <title>合成数大富豪 練習部屋</title>
+    <link rel="stylesheet" href="../client-common/styles.css?v=shared-45c3968f4e87" />
+    <link rel="stylesheet" href="../theme.css?v=plus-20260805-2" />
+    <link rel="stylesheet" href="./practice.css?v=practice-20260805-1" />
   </head>
   <body>
+    <section id="practiceAuthGate" class="practice-auth-gate" aria-labelledby="practiceAuthTitle">
+      <form id="practiceAuthForm" class="practice-auth-card">
+        <p class="eyebrow">PRIVATE PRACTICE</p>
+        <h1 id="practiceAuthTitle">合成数大富豪 練習部屋</h1>
+        <p>このページは大会練習用です。アクセストークンを入力してください。</p>
+        <label class="field-label" for="practiceAccessToken">アクセストークン</label>
+        <input id="practiceAccessToken" type="password" autocomplete="current-password" required />
+        <button class="primary-button" type="submit">認証する</button>
+        <p id="practiceAuthStatus" class="small-status" aria-live="polite"></p>
+      </form>
+    </section>
     <main class="app-shell">
       <section id="topBand" class="top-band">
         <div>
-          <h1>素数大富豪＋</h1>
+          <h1>合成数大富豪 練習部屋</h1>
           <p class="lead">
-            いつもの素数大富豪と特殊ルールを、見やすい共通操作で遊べる対戦UIです。
+            合成数出しだけで分け切りを練習する、非公開の専用ページです。
           </p>
         </div>
         <div class="connection-card">
@@ -42,14 +54,14 @@
           </label>
           <div class="room-group-choice" role="group" aria-label="ルールカテゴリ選択">
             <button id="roomGroupPrimaryBtn" class="room-group-choice-card active" type="button" aria-pressed="true">
-              <span>Classic</span>
-              <strong>いつもの素数大富豪</strong>
-              <small>手札枚数・ペナルティ別の6部屋</small>
+              <span>Practice</span>
+              <strong>合成数大富豪</strong>
+              <small>専用CPU・アシストあり</small>
             </button>
             <button id="roomGroupSecondaryBtn" class="room-group-choice-card" type="button" aria-pressed="false">
-              <span>Plus</span>
-              <strong>特殊ルール</strong>
-              <small>初期革命・四つ子素数・半素数・定期大会</small>
+              <span>Private</span>
+              <strong>大会練習用</strong>
+              <small>認証済みの本人だけ利用可能</small>
             </button>
           </div>
           <div class="room-picker">
@@ -62,7 +74,7 @@
           <a class="campaign-inline-link" data-feature="campaign" href="#">
             CPU勝利数キャンペーンの詳細・ランキングを見る →
           </a>
-          <p class="neo-note">ClassicとPlus専用です。NEOの登録・アシスト機能は使用しません。</p>
+          <p class="neo-note">トップページから隔離された大会練習用ページです。入室のDiscord通知も送信しません。</p>
           <div class="action-stack">
             <button id="practiceBtn" class="primary-button" type="button" disabled>入室する</button>
           </div>
@@ -117,10 +129,10 @@
         <div class="panel guide-panel">
           <h2>遊び方</h2>
           <ol class="plain-steps">
-            <li>手札を並べて素数を作り、先に手札を0枚にしたら勝ち</li>
-            <li>場と同じ枚数で、場より大きい数を出します</li>
-            <li>Classicは手札枚数やペナルティの違う部屋から選べます</li>
-            <li>Plusでは初期革命・四つ子素数・半素数を自動判定します</li>
+            <li>通常は合成数出しだけで手札を減らします</li>
+            <li>手札3枚以下では、全手札を使う通常の合法手で上がれます</li>
+            <li>57と1729は合成数出しでだけ発動します</li>
+            <li>合成数上がりを優先する専用CPUと対戦できます</li>
           </ol>
           <div class="mini-rules">
             <span>A=1 / T=10 / J=11 / Q=12 / K=13</span>
@@ -223,19 +235,18 @@
           </div>
 
           <details id="registerPanel" class="panel register-panel" data-feature="registration">
-            <summary>登録リスト</summary>
+            <summary>自分の数表</summary>
             <p class="register-help-copy">
               素数は空白・改行・カンマ区切り、合成数は
-              <code>12=2*2*3</code> の形式で入力します。サンプルのままでも遊べます。
-              <a class="text-link" href="https://greenplus.github.io/primeqk_online/" target="_blank" rel="noopener">登録方法を詳しく見る</a>
+              <code>12=2*2*3</code> の形式で入力します。ここでの数表はアシスト用で、手動プレイの合法性は制限しません。
             </p>
             <p id="registerLimitNote" class="register-limit-note">初級は素数・合成数あわせて500件まで登録できます。</p>
             <select id="sampleSelect" class="full-select"></select>
-            <textarea id="primeText" rows="6" spellcheck="false" placeholder="登録素数"></textarea>
-            <textarea id="compositeText" rows="4" spellcheck="false" placeholder="登録合成数"></textarea>
+            <textarea id="primeText" rows="6" spellcheck="false" placeholder="自分の素数表"></textarea>
+            <textarea id="compositeText" rows="4" spellcheck="false" placeholder="自分の合成数表"></textarea>
             <div class="button-row">
               <button id="sampleBtn" class="ghost-button compact" type="button">サンプル読込</button>
-              <button id="saveRegisterBtn" class="secondary-button" type="button">登録する</button>
+              <button id="saveRegisterBtn" class="secondary-button" type="button">アシストに反映</button>
               <span id="registerStatus" class="small-status">未登録</span>
             </div>
           </details>
@@ -384,7 +395,7 @@
       </div>
     </dialog>
 
-    <script src="./product-config.js?v=plus-20260805-2"></script>
-    <script src="./client-common/app.js?v=shared-45c3968f4e87"></script>
+    <script src="./product-config.js?v=practice-20260805-1"></script>
+    <script src="../client-common/app.js?v=shared-45c3968f4e87"></script>
   </body>
 </html>

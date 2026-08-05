@@ -1,0 +1,42 @@
+window.PRIMEQK_CLIENT_CONFIG = {
+  productKey: "plus-composite-practice",
+  productName: "合成数大富豪 練習部屋",
+  lobbyName: "合成数大富豪 練習ロビー",
+  wsUrl: "wss://web-production-c8e68.up.railway.app/ws/plus-practice",
+  shareUrl: "",
+  playerJoinedSoundUrl: "../assets/sounds/player-joined.mp3",
+  maxRoomPlayers: 2,
+  defaultRoomGroupKey: "practice",
+  defaultRoomKey: "practice1",
+  roomGroupOrder: ["practice"],
+  roomGroups: {
+    practice: {
+      label: "合成数練習",
+      roomKeys: ["practice1"],
+    },
+  },
+  rooms: {
+    practice1: {
+      roomId: "composite_practice_1",
+      roomGroupKey: "practice",
+      roomNumber: 1,
+      label: "合成数練習",
+      title: "11枚 / 通常",
+      summary: "合成数限定・3枚以下上がり可",
+      badge: "合成数限定 / 11枚 / 専用CPU",
+      defaultSampleKey: "composite_practice_ge3",
+      defaultCpuKey: "composite_practice",
+    },
+  },
+  defaultSampleKey: "composite_practice_ge3",
+  features: {
+    assist: true,
+    registration: true,
+    hnpChallenge: false,
+    campaign: false,
+    globalChat: false,
+    tournament: false,
+    recruitment: false,
+    practiceAuth: true,
+  },
+};
