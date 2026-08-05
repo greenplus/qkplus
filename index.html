@@ -33,6 +33,13 @@
             <input id="nameInput" maxlength="24" autocomplete="nickname" placeholder="例: マグロ" />
             <button id="randomNameBtn" class="ghost-button" type="button">おまかせ</button>
           </div>
+          <label class="guest-mode-option" for="guestModeToggle">
+            <input id="guestModeToggle" type="checkbox" />
+            <span>
+              <strong>このタブだけゲストとして使う</strong>
+              <small id="identityModeNote">保存済みの名前と大会参加情報を使います。</small>
+            </span>
+          </label>
           <div class="room-group-choice" role="group" aria-label="ルールカテゴリ選択">
             <button id="roomGroupPrimaryBtn" class="room-group-choice-card active" type="button" aria-pressed="true">
               <span>Classic</span>
@@ -130,6 +137,7 @@
               <button id="addCpuBtn" class="ghost-button" type="button">CPU追加</button>
               <button id="startBtn" class="primary-button" type="button">開始</button>
             </div>
+            <p id="reconnectPolicyNote" class="microcopy">切断復帰猶予を読み込み中です。</p>
             <div id="cpuChooser" class="cpu-chooser hidden">
               <div class="cpu-chooser-heading">
                 <label for="cpuProfileSelect">対戦するCPU</label>
@@ -158,12 +166,16 @@
               <button id="tournamentWithdrawBtn" class="ghost-button" type="button">参加取消</button>
             </div>
             <div id="tournamentPairing" class="tournament-pairing hidden"></div>
+            <div class="tournament-league-wrap">
+              <strong>リーグ表</strong>
+              <div id="tournamentLeagueTable" class="tournament-league-table"></div>
+            </div>
             <div class="tournament-standings-wrap">
               <strong>順位</strong>
               <ol id="tournamentStandings" class="tournament-standings"></ol>
             </div>
-            <p class="microcopy">
-              復帰トークンはこのブラウザだけに保存します。共有端末では大会後に参加取消してください。
+            <p id="tournamentTimingNote" class="microcopy">
+              対戦呼び出しと切断復帰の猶予時間を読み込み中です。
             </p>
           </div>
 

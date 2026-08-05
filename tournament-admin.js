@@ -86,10 +86,10 @@ function renderTournament() {
   }
   el.runSummary.className = "run-summary";
   el.runSummary.textContent = `${tournament.title} / ${statusLabel(tournament.status)} / ${formatDate(tournament.starts_at)}開始 / ${tournament.participant_count}人`;
-  const current = tournament.current_match;
-  el.currentMatch.className = current ? "current-match active" : "current-match empty";
-  el.currentMatch.textContent = current
-    ? `現在: 第${current.round_no}ラウンド ${current.player1_name} vs ${current.player2_name}`
+  const activeMatches = tournament.active_matches || (tournament.current_match ? [tournament.current_match] : []);
+  el.currentMatch.className = activeMatches.length ? "current-match active" : "current-match empty";
+  el.currentMatch.textContent = activeMatches.length
+    ? `進行中 ${activeMatches.length}試合: ${activeMatches.map((match) => `R${match.round_no} ${match.player1_name} vs ${match.player2_name}（${statusLabel(match.status)}）`).join(" / ")}`
     : "進行中の対戦はありません。";
 
   el.matchList.replaceChildren(...(tournament.matches || []).map((match) => {
@@ -145,7 +145,7 @@ function message(text, error = false) {
 }
 
 function statusLabel(status) {
-  return ({ scheduled: "開催予定", registration: "受付中", running: "進行中", finished: "終了", cancelled: "中止", pending: "待機", playing: "対戦中", completed: "完了", skipped: "スキップ" })[status] || status;
+  return ({ scheduled: "開催予定", registration: "受付中", running: "進行中", finished: "終了", cancelled: "中止", pending: "待機", called: "呼出中", playing: "対戦中", completed: "完了", skipped: "スキップ" })[status] || status;
 }
 
 function formatDate(value) {

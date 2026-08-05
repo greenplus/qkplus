@@ -58,6 +58,61 @@
 .tournament-pairing span { flex: 1; font-weight: 800; }
 .tournament-pairing small { color: #2563eb; }
 
+.tournament-match-ready-button {
+  min-width: 150px;
+  padding: 9px 12px;
+}
+
+.tournament-league-wrap {
+  display: grid;
+  gap: 8px;
+}
+
+.tournament-league-table {
+  overflow-x: auto;
+  border: 1px solid #d7e1ee;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.tournament-league-table.empty {
+  padding: 12px;
+  color: #6b7280;
+}
+
+.tournament-league-table table {
+  width: 100%;
+  min-width: 420px;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.tournament-league-table th,
+.tournament-league-table td {
+  max-width: 120px;
+  padding: 8px;
+  border-right: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tournament-league-table th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: #f8fafc;
+  text-align: left;
+}
+
+.league-result-win { color: #166534; font-weight: 900; }
+.league-result-loss { color: #991b1b; font-weight: 900; }
+.league-result-playing { background: #dbeafe; color: #1d4ed8; }
+.league-result-called { background: #fef3c7; color: #92400e; }
+.league-result-self { background: #f1f5f9; color: #64748b; }
+
 .tournament-standings-wrap {
   display: grid;
   gap: 8px;
