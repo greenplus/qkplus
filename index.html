@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>素数大富豪＋</title>
     <link rel="stylesheet" href="./client-common/styles.css?v=shared-a84fd693a1f3" />
-    <link rel="stylesheet" href="./theme.css?v=plus-20260803-1" />
+    <link rel="stylesheet" href="./theme.css?v=plus-20260805-2" />
   </head>
   <body>
     <main class="app-shell">
@@ -68,6 +68,49 @@
           </div>
           <p class="microcopy">
             部屋ごとのルールはサーバーが判定します。遊びたいカテゴリと部屋を選んで入室してください。
+          </p>
+        </div>
+
+        <div class="panel recruitment-panel" data-feature="recruitment">
+          <div class="recruitment-heading">
+            <div>
+              <p class="eyebrow">24時間以内</p>
+              <h2>対戦募集</h2>
+            </div>
+            <span id="recruitmentCount" class="recruitment-count">0 / 5件</span>
+          </div>
+          <p class="recruitment-intro">
+            集まりたい時間と希望ルールを掲示できます。集合時間になると自動で消えます。
+          </p>
+          <div id="recruitmentList" class="recruitment-list" aria-live="polite">
+            <p class="recruitment-empty">募集を読み込んでいます…</p>
+          </div>
+          <form id="recruitmentForm" class="recruitment-form">
+            <label>
+              <span>集合時間</span>
+              <input id="recruitmentTime" type="datetime-local" required />
+            </label>
+            <label>
+              <span>名前</span>
+              <input id="recruitmentName" maxlength="24" autocomplete="nickname" required />
+            </label>
+            <label>
+              <span>希望ルール</span>
+              <select id="recruitmentRule" required>
+                <option value="classic">Classic</option>
+                <option value="five_penalty_one">5枚 / ペナルティ1枚</option>
+                <option value="seven_even_half_penalty_one">7枚 / 偶数半減 / ペナルティ1枚</option>
+                <option value="normal">通常</option>
+                <option value="initial_revolution">初期革命</option>
+                <option value="tetrad">四つ子素数</option>
+                <option value="semiprime">半素数</option>
+                <option value="either">どれでも</option>
+              </select>
+            </label>
+            <button id="recruitmentSubmitBtn" class="primary-button" type="submit">募集を投稿</button>
+          </form>
+          <p id="recruitmentStatus" class="recruitment-status" aria-live="polite">
+            Plus掲示板は全体5件・1ユーザー1件まで。自分の投稿だけ削除できます。
           </p>
         </div>
 
@@ -341,7 +384,7 @@
       </div>
     </dialog>
 
-    <script src="./product-config.js?v=plus-20260803-1"></script>
+    <script src="./product-config.js?v=plus-20260805-2"></script>
     <script src="./client-common/app.js?v=shared-a84fd693a1f3"></script>
   </body>
 </html>

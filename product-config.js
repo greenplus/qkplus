@@ -119,5 +119,6 @@ window.PRIMEQK_CLIENT_CONFIG = {
     campaign: false,
     globalChat: true,
     tournament: true,
+    recruitment: true,
   },
 };
