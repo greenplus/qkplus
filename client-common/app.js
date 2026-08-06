@@ -5,8 +5,8 @@ if (!PRODUCT_CONFIG) {
 }
 
 const roomGroupOrder = PRODUCT_CONFIG.roomGroupOrder || Object.keys(PRODUCT_CONFIG.roomGroups || {});
-if (roomGroupOrder.length < 1 || roomGroupOrder.length > 2) {
-  throw new Error("the shared lobby requires one or two room groups");
+if (roomGroupOrder.length < 1 || roomGroupOrder.length > 3) {
+  throw new Error("the shared lobby requires one to three room groups");
 }
 
 const CONFIG = {
@@ -308,6 +308,8 @@ function bindElements() {
     "identityModeNote",
     "roomGroupPrimaryBtn",
     "roomGroupSecondaryBtn",
+    "roomGroupTertiaryBtn",
+    "tournamentTabNotice",
     "roomPickerHint",
     "roomList",
     "practiceBtn",
@@ -412,7 +414,7 @@ function bindElements() {
 }
 
 function bindEvents() {
-  const [primaryGroupKey, secondaryGroupKey] = CONFIG.roomGroupOrder;
+  const [primaryGroupKey, secondaryGroupKey, tertiaryGroupKey] = CONFIG.roomGroupOrder;
   el.randomNameBtn.addEventListener("click", setRandomName);
   el.nameInput.addEventListener("change", persistCurrentName);
   el.nameInput.addEventListener("blur", persistCurrentName);
@@ -420,6 +422,9 @@ function bindEvents() {
   el.roomGroupPrimaryBtn.addEventListener("click", () => selectRoomGroup(primaryGroupKey));
   if (secondaryGroupKey) {
     el.roomGroupSecondaryBtn.addEventListener("click", () => selectRoomGroup(secondaryGroupKey));
+  }
+  if (tertiaryGroupKey && el.roomGroupTertiaryBtn) {
+    el.roomGroupTertiaryBtn.addEventListener("click", () => selectRoomGroup(tertiaryGroupKey));
   }
   el.roomList.addEventListener("click", (event) => {
     const roomButton = event.target.closest("[data-room-key]");
@@ -1985,22 +1990,32 @@ function renderCpuChooser() {
 function renderRoomChoice() {
   const room = currentRoomOption();
   const roomId = currentRoomId();
-  const [primaryGroupKey, secondaryGroupKey] = CONFIG.roomGroupOrder;
+  const groupButtons = [
+    el.roomGroupPrimaryBtn,
+    el.roomGroupSecondaryBtn,
+    el.roomGroupTertiaryBtn,
+  ];
 
-  el.roomGroupPrimaryBtn.parentElement.classList.toggle("hidden", !secondaryGroupKey);
-
-  el.roomGroupPrimaryBtn.classList.toggle("active", state.selectedRoomGroupKey === primaryGroupKey);
-  el.roomGroupSecondaryBtn.classList.toggle("active", !!secondaryGroupKey && state.selectedRoomGroupKey === secondaryGroupKey);
-  el.roomGroupPrimaryBtn.disabled = state.roomJoined;
-  el.roomGroupSecondaryBtn.disabled = state.roomJoined || !secondaryGroupKey;
-  el.roomGroupPrimaryBtn.setAttribute("aria-pressed", String(state.selectedRoomGroupKey === primaryGroupKey));
-  el.roomGroupSecondaryBtn.setAttribute("aria-pressed", String(state.selectedRoomGroupKey === secondaryGroupKey));
+  el.roomGroupPrimaryBtn.parentElement.classList.toggle("hidden", CONFIG.roomGroupOrder.length < 2);
+  groupButtons.forEach((button, index) => {
+    if (!button) return;
+    const groupKey = CONFIG.roomGroupOrder[index];
+    button.classList.toggle("hidden", !groupKey);
+    button.classList.toggle("active", !!groupKey && state.selectedRoomGroupKey === groupKey);
+    button.disabled = state.roomJoined || !groupKey;
+    button.setAttribute("aria-pressed", String(!!groupKey && state.selectedRoomGroupKey === groupKey));
+  });
+  renderTournamentTabNotice();
   renderRoomList();
 
-  el.practiceBtn.textContent = `${room.label} ルーム${room.roomNumber}に入室する`;
+  el.practiceBtn.textContent = room.tournament
+    ? "大会ロビーに入室する"
+    : `${room.label} ルーム${room.roomNumber}に入室する`;
   el.practiceBtn.disabled = !state.connected || !isRoomSelectable(state.selectedRoomKey);
   el.roomBadge.textContent = room.badge;
-  el.roomHeading.textContent = `${room.label}ルーム ${room.roomNumber}`;
+  el.roomHeading.textContent = room.tournament
+    ? "大会ロビー"
+    : `${room.label}ルーム ${room.roomNumber}`;
   const registeredNumberLimit = state.roomRegisteredNumberLimits[roomId];
   el.registerLimitNote.classList.toggle("hidden", !Number.isFinite(registeredNumberLimit));
   if (Number.isFinite(registeredNumberLimit)) {
@@ -2009,6 +2024,35 @@ function renderRoomChoice() {
   if (state.connected && state.appMode === "setup") {
     renderServerLobbyStatus();
   }
+}
+
+function renderTournamentTabNotice() {
+  if (!el.tournamentTabNotice) return;
+  const tournaments = Object.values(state.tournaments || {})
+    .filter((tournament) => tournament && ["scheduled", "registration", "running"].includes(tournament.status))
+    .sort((left, right) => {
+      if (left.status === "running" && right.status !== "running") return -1;
+      if (right.status === "running" && left.status !== "running") return 1;
+      return (Date.parse(left.starts_at) || Infinity) - (Date.parse(right.starts_at) || Infinity);
+    });
+  const tournament = tournaments[0];
+  el.tournamentTabNotice.classList.toggle("hidden", !tournament);
+  if (!tournament) {
+    el.tournamentTabNotice.textContent = "";
+    return;
+  }
+
+  const statusLabel = tournament.status === "running"
+    ? "大会進行中"
+    : tournament.status === "registration"
+      ? "参加受付中"
+      : "開催予定";
+  const schedule = tournament.status === "running"
+    ? ""
+    : ` · ${formatTournamentDate(tournament.starts_at)}開始`;
+  const title = tournament.title ? `「${tournament.title}」` : "";
+  const additionalCount = tournaments.length > 1 ? ` ほか${tournaments.length - 1}件` : "";
+  el.tournamentTabNotice.textContent = `${statusLabel}${schedule} ${title}${additionalCount}`.trim();
 }
 
 function renderRoomList() {
@@ -2049,7 +2093,7 @@ function renderRoomList() {
     button.setAttribute("aria-checked", String(active));
     button.setAttribute(
       "aria-label",
-      `ルーム${room.roomNumber}、${available ? `${count}人入室中` : "準備中"}、${status}`,
+      `${room.tournament ? "大会ロビー" : `ルーム${room.roomNumber}`}、${available ? `${count}人入室中` : "準備中"}、${status}`,
     );
 
     const heading = document.createElement("span");
@@ -2058,7 +2102,7 @@ function renderRoomList() {
     dot.className = "room-status-dot";
     dot.setAttribute("aria-hidden", "true");
     const name = document.createElement("strong");
-    name.textContent = `ルーム ${room.roomNumber}`;
+    name.textContent = room.tournament ? "大会ロビー" : `ルーム ${room.roomNumber}`;
     heading.append(dot, name);
 
     const ruleTitle = document.createElement("span");

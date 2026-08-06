@@ -1,13 +1,13 @@
 window.PRIMEQK_CLIENT_CONFIG = {
   productKey: "plus",
   productName: "素数大富豪＋",
-  lobbyName: "Classic / Plus ロビー",
+  lobbyName: "Classic / Plus / 大会ロビー",
   wsUrl: "wss://web-production-c8e68.up.railway.app/ws/plus",
   shareUrl: "https://greenplus.github.io/qkplus/",
   maxRoomPlayers: 10,
   defaultRoomGroupKey: "classic",
   defaultRoomKey: "classic1",
-  roomGroupOrder: ["classic", "plus"],
+  roomGroupOrder: ["classic", "plus", "tournament"],
   roomGroups: {
     classic: {
       label: "Classic",
@@ -15,7 +15,11 @@ window.PRIMEQK_CLIENT_CONFIG = {
     },
     plus: {
       label: "Plus",
-      roomKeys: ["plus1", "plus2", "plus3", "plusTournament"],
+      roomKeys: ["plus1", "plus2", "plus3"],
+    },
+    tournament: {
+      label: "大会",
+      roomKeys: ["plusTournament"],
     },
   },
   rooms: {
@@ -102,9 +106,9 @@ window.PRIMEQK_CLIENT_CONFIG = {
     },
     plusTournament: {
       roomId: "plus_tournament_1",
-      roomGroupKey: "plus",
-      roomNumber: "大会",
-      label: "Plus",
+      roomGroupKey: "tournament",
+      roomNumber: "ロビー",
+      label: "大会",
       title: "定期大会",
       summary: "日程・ルールは大会ごとに設定",
       badge: "システム進行の定期大会",

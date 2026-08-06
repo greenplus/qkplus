@@ -259,7 +259,7 @@ textarea,
 }
 
 .room-group-choice {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   align-items: stretch;
 }
 
@@ -309,6 +309,23 @@ textarea,
   color: var(--muted);
   font-size: 0.76rem;
   font-weight: 750;
+}
+
+.room-group-choice-card .tournament-tab-notice {
+  display: block;
+  margin-top: 6px;
+  border: 1px solid #e5a43a;
+  border-radius: 6px;
+  background: #fff3d6;
+  padding: 5px 7px;
+  color: #704600;
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1.4;
+}
+
+.room-group-choice-card .tournament-tab-notice.hidden {
+  display: none;
 }
 
 .room-group-choice-card .campaign-room-badge {

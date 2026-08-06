@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>素数大富豪＋</title>
-    <link rel="stylesheet" href="./client-common/styles.css?v=shared-e3e0590c27b6" />
+    <link rel="stylesheet" href="./client-common/styles.css?v=shared-09ed0c6e386f" />
     <link rel="stylesheet" href="./theme.css?v=plus-20260805-2" />
   </head>
   <body>
@@ -49,7 +49,13 @@
             <button id="roomGroupSecondaryBtn" class="room-group-choice-card" type="button" aria-pressed="false">
               <span>Plus</span>
               <strong>特殊ルール</strong>
-              <small>初期革命・四つ子素数・半素数・定期大会</small>
+              <small>初期革命・四つ子素数・半素数</small>
+            </button>
+            <button id="roomGroupTertiaryBtn" class="room-group-choice-card" type="button" aria-pressed="false">
+              <span>Tournament</span>
+              <strong>大会</strong>
+              <small>日程・ルール設定とシステム自動進行</small>
+              <span id="tournamentTabNotice" class="tournament-tab-notice hidden" aria-live="polite"></span>
             </button>
           </div>
           <div class="room-picker">
@@ -62,7 +68,7 @@
           <a class="campaign-inline-link" data-feature="campaign" href="#">
             CPU勝利数キャンペーンの詳細・ランキングを見る →
           </a>
-          <p class="neo-note">ClassicとPlus専用です。NEOの登録・アシスト機能は使用しません。</p>
+          <p class="neo-note">Classic・Plus・大会専用です。NEOの登録・アシスト機能は使用しません。</p>
           <div class="action-stack">
             <button id="practiceBtn" class="primary-button" type="button" disabled>入室する</button>
           </div>
@@ -388,7 +394,7 @@
       </div>
     </dialog>
 
-    <script src="./product-config.js?v=plus-20260805-2"></script>
-    <script src="./client-common/app.js?v=shared-e3e0590c27b6"></script>
+    <script src="./product-config.js?v=plus-20260806-1"></script>
+    <script src="./client-common/app.js?v=shared-09ed0c6e386f"></script>
   </body>
 </html>
