@@ -65,6 +65,7 @@ function send(payload) {
 function handleMessage(msg) {
   if (msg.type === "tournament_update" || msg.type === "tournament_admin_result") {
     tournament = msg.tournament;
+    renderRuleOptions(tournament?.available_rules || []);
     renderTournament();
     if (msg.type === "tournament_admin_result") message("変更を保存しました。");
   } else if (msg.type === "tournament_admin_history") {
@@ -85,7 +86,7 @@ function renderTournament() {
     return;
   }
   el.runSummary.className = "run-summary";
-  el.runSummary.textContent = `${tournament.title} / ${statusLabel(tournament.status)} / ${formatDate(tournament.starts_at)}開始 / ${tournament.participant_count}人`;
+  el.runSummary.textContent = `${tournament.title} / ${tournament.rule?.summary || tournament.rule_key} / ${statusLabel(tournament.status)} / ${formatDate(tournament.starts_at)}開始 / ${tournament.participant_count}人`;
   const activeMatches = tournament.active_matches || (tournament.current_match ? [tournament.current_match] : []);
   el.currentMatch.className = activeMatches.length ? "current-match active" : "current-match empty";
   el.currentMatch.textContent = activeMatches.length
@@ -134,9 +135,25 @@ function renderHistory(runs) {
     const row = document.createElement("article");
     row.className = "history-row";
     const leaders = (run.standings || []).filter((item) => item.rank === 1).map((item) => item.display_name).join("、");
-    row.textContent = `${formatDate(run.starts_at)} / ${run.title} / ${statusLabel(run.status)}${leaders ? ` / 1位 ${leaders}` : ""}`;
+    row.textContent = `${formatDate(run.starts_at)} / ${run.title} / ${run.rule?.summary || run.rule_key} / ${statusLabel(run.status)}${leaders ? ` / 1位 ${leaders}` : ""}`;
     return row;
   }));
+}
+
+function renderRuleOptions(rules) {
+  if (!Array.isArray(rules) || !rules.length) return;
+  const selected = el.ruleKey.value;
+  el.ruleKey.replaceChildren(...rules.map((rule) => {
+    const option = document.createElement("option");
+    option.value = rule.key;
+    option.textContent = rule.summary || rule.label || rule.key;
+    return option;
+  }));
+  if ([...el.ruleKey.options].some((option) => option.value === selected)) {
+    el.ruleKey.value = selected;
+  } else if ([...el.ruleKey.options].some((option) => option.value === "std-11-n-c")) {
+    el.ruleKey.value = "std-11-n-c";
+  }
 }
 
 function message(text, error = false) {

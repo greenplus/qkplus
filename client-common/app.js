@@ -398,6 +398,7 @@ function bindElements() {
     "tournamentTitle",
     "tournamentStatusBadge",
     "tournamentSchedule",
+    "tournamentRuleSummary",
     "tournamentMessage",
     "tournamentRegisterBtn",
     "tournamentWithdrawBtn",
@@ -1703,6 +1704,9 @@ function renderTournament() {
   el.tournamentTitle.textContent = tournament?.title || "定期大会";
   el.tournamentStatusBadge.textContent = statusLabels[tournament?.status] || "未開催";
   el.tournamentStatusBadge.dataset.status = tournament?.status || "unavailable";
+  if (el.tournamentRuleSummary) {
+    el.tournamentRuleSummary.textContent = tournament?.rule?.summary || "未設定";
+  }
 
   if (!tournament || tournament.status === "unavailable") {
     el.tournamentSchedule.textContent = "次回日程は未設定です。";

@@ -27,16 +27,26 @@
             <select id="ruleKey">
               <option value="std-5-1">5枚 / ペナルティ1枚</option>
               <option value="std-7-1">7枚 / ペナルティ1枚</option>
-              <option value="std-11-n-c" selected>11枚 / 通常</option>
+              <option value="std-11-f">11枚 / ペナルティは場の枚数 / 合成数なし</option>
+              <option value="std-11-f-c">11枚 / ペナルティは場の枚数</option>
+              <option value="std-11-n-c" selected>11枚</option>
+              <option value="std-11-n-no-c">11枚 / 合成数なし</option>
               <option value="std-11-n-c-rev">初期革命 / 11枚</option>
+              <option value="half-5-f">5枚 / 偶数カード半減 / ペナルティは場の枚数 / 合成数なし</option>
+              <option value="half-7-1-c">7枚 / 偶数カード半減 / ペナルティ1枚</option>
+              <option value="event-chef-11-1-c">11枚 / 偶数カード半減＋コックさん12枚 / ペナルティ1枚</option>
+              <option value="tetrad-11-n">四つ子素数 / 11枚 / 合成数なし</option>
               <option value="tetrad-11-n-c">四つ子素数 / 11枚</option>
+              <option value="semiprime-11-n">半素数 / 11枚 / 合成数なし</option>
               <option value="semiprime-11-n-c">半素数 / 11枚</option>
+              <option value="semiprime-11-1-c">半素数 / 11枚 / ペナルティ1枚</option>
             </select>
           </label>
           <label>参加登録開始<input id="registrationOpensAt" type="datetime-local" required /></label>
           <label>大会開始<input id="startsAt" type="datetime-local" required /></label>
           <label>参加上限<input id="maxParticipants" type="number" min="2" max="10" value="10" required /></label>
           <button type="submit" class="primary">この日程で設定</button>
+          <p class="note">山札通常・ペナルティ通常・合成数ありは標準設定のため、ルール名では省略します。</p>
           <p class="note">同じフォーマットIDを使うと、同形式の開催回として履歴をまとめられます。</p>
         </form>
 

@@ -47,6 +47,26 @@
   line-height: 1.6;
 }
 
+.tournament-rule-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 8px 0;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.tournament-rule-line span {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.tournament-rule-line strong {
+  line-height: 1.45;
+}
+
 .tournament-pairing {
   align-items: flex-start;
   border-radius: 14px;
