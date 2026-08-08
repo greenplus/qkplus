@@ -120,6 +120,7 @@ const state = {
   assistTimer: null,
   assistRequestVersion: 0,
   practiceAuthorized: !CONFIG.features.practiceAuth,
+  practiceStats: null,
 };
 
 const el = {};
@@ -198,6 +199,7 @@ function updatePracticeAuthUi(message) {
 function requestInitialLobbyState() {
   send({ type: "get_room_counts" });
   requestRecruitments();
+  requestCompositePracticeStats();
   if (state.roomJoined) {
     send({ type: "set_name", name: state.playerName });
     send({
@@ -408,6 +410,12 @@ function bindElements() {
     "tournamentLeagueTable",
     "tournamentStandings",
     "tournamentTimingNote",
+    "practiceStatsPanel",
+    "practiceStatsSummary",
+    "practiceStatsStatus",
+    "practiceStatsBody",
+    "practiceStatsRefreshBtn",
+    "practiceStatsCsvBtn",
   ].forEach((id) => {
     el[id] = document.getElementById(id);
   });
@@ -431,6 +439,12 @@ function bindEvents() {
     if (roomButton) selectRoom(roomButton.dataset.roomKey);
   });
   el.practiceBtn.addEventListener("click", () => startFlow("enter"));
+  if (el.practiceStatsRefreshBtn) {
+    el.practiceStatsRefreshBtn.addEventListener("click", requestCompositePracticeStats);
+  }
+  if (el.practiceStatsCsvBtn) {
+    el.practiceStatsCsvBtn.addEventListener("click", downloadCompositePracticeStatsCsv);
+  }
   if (el.recruitmentForm) el.recruitmentForm.addEventListener("submit", createRecruitment);
   if (el.recruitmentList) el.recruitmentList.addEventListener("click", (event) => {
     const button = event.target.closest("[data-delete-recruitment]");
@@ -621,6 +635,10 @@ function handleMessage(msg) {
       } else {
         clearPracticeAccessToken();
       }
+      break;
+    case "composite_practice_stats":
+      state.practiceStats = msg;
+      renderCompositePracticeStats();
       break;
     case "room_counts":
       state.roomCounts = msg.counts || {};
@@ -837,6 +855,9 @@ function handleMessage(msg) {
     case "action_result":
       if (msg.action === "field_flow") {
         showFlowPreview(msg.played_cards || [], msg.number);
+      }
+      if (msg.mode === "composite" && state.practiceAuthorized) {
+        requestCompositePracticeStats();
       }
       break;
     case "penalty":
@@ -2792,6 +2813,80 @@ function sendChat() {
   if (!message) return;
   send({ type: state.chatMode === "global" ? "global_chat" : "chat", message });
   el.chatInput.value = "";
+}
+
+function requestCompositePracticeStats() {
+  if (!el.practiceStatsPanel || !state.practiceAuthorized) return;
+  send({ type: "get_composite_practice_stats" });
+}
+
+function renderCompositePracticeStats() {
+  if (!el.practiceStatsPanel || !el.practiceStatsBody) return;
+  const stats = state.practiceStats;
+  const items = Array.isArray(stats?.items) ? stats.items : [];
+  const totals = stats?.totals || {};
+  el.practiceStatsBody.replaceChildren();
+
+  if (!items.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 4;
+    cell.className = "practice-stats-empty";
+    cell.textContent = "まだ成功した合成数出しはありません。";
+    row.append(cell);
+    el.practiceStatsBody.append(row);
+  } else {
+    items.forEach((item) => {
+      const row = document.createElement("tr");
+      [item.number, item.owner_count, item.cpu_count, item.total_count].forEach((value) => {
+        const cell = document.createElement("td");
+        cell.textContent = String(value ?? 0);
+        row.append(cell);
+      });
+      el.practiceStatsBody.append(row);
+    });
+  }
+
+  if (el.practiceStatsSummary) {
+    el.practiceStatsSummary.textContent =
+      `自分 ${totals.owner_count || 0}回 / CPU ${totals.cpu_count || 0}回 / ${totals.distinct_count || 0}種類`;
+  }
+  if (el.practiceStatsStatus) {
+    el.practiceStatsStatus.textContent = stats?.persistent
+      ? "Railway PostgreSQLに保存中（成功した合成数出しのみ）"
+      : "DB未接続のため一時保存中（サーバー再起動で消えます）";
+    el.practiceStatsStatus.classList.toggle("warning", !stats?.persistent);
+  }
+  if (el.practiceStatsCsvBtn) el.practiceStatsCsvBtn.disabled = items.length === 0;
+}
+
+function csvCell(value) {
+  return `"${String(value ?? "").replaceAll('"', '""')}"`;
+}
+
+function downloadCompositePracticeStatsCsv() {
+  const items = Array.isArray(state.practiceStats?.items) ? state.practiceStats.items : [];
+  if (!items.length) return;
+  const rows = [
+    ["合成数", "自分", "CPU", "合計", "初回日時", "最終日時"],
+    ...items.map((item) => [
+      item.number,
+      item.owner_count,
+      item.cpu_count,
+      item.total_count,
+      item.first_played_at,
+      item.last_played_at,
+    ]),
+  ];
+  const csv = "\ufeff" + rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `composite-practice-counts-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function send(payload) {

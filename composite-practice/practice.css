@@ -37,3 +37,75 @@ body.practice-locked .app-shell {
   pointer-events: none;
   user-select: none;
 }
+
+.practice-stats-panel {
+  margin: 18px 0;
+}
+
+.practice-stats-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.practice-stats-heading h2,
+.practice-stats-heading p,
+.practice-stats-summary {
+  margin: 0;
+}
+
+.practice-stats-summary {
+  margin-top: 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.practice-stats-table-wrap {
+  max-height: 280px;
+  margin: 12px 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.practice-stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.practice-stats-table th,
+.practice-stats-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.practice-stats-table th:first-child,
+.practice-stats-table td:first-child {
+  text-align: left;
+}
+
+.practice-stats-table thead {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+}
+
+.practice-stats-empty {
+  color: var(--muted);
+  text-align: center !important;
+}
+
+.practice-stats-panel .small-status.warning {
+  color: var(--danger, #b44);
+}
+
+@media (max-width: 620px) {
+  .practice-stats-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

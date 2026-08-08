@@ -145,6 +145,31 @@
         </div>
       </section>
 
+      <section id="practiceStatsPanel" class="panel practice-stats-panel" aria-labelledby="practiceStatsTitle">
+        <div class="practice-stats-heading">
+          <div>
+            <p class="eyebrow">COMPOSITE LOG</p>
+            <h2 id="practiceStatsTitle">合成数出現カウント</h2>
+          </div>
+          <div class="button-row">
+            <button id="practiceStatsRefreshBtn" class="ghost-button compact" type="button">更新</button>
+            <button id="practiceStatsCsvBtn" class="secondary-button compact" type="button" disabled>CSV保存</button>
+          </div>
+        </div>
+        <p id="practiceStatsSummary" class="practice-stats-summary">読み込み中…</p>
+        <div class="practice-stats-table-wrap">
+          <table class="practice-stats-table">
+            <thead>
+              <tr><th>合成数</th><th>自分</th><th>CPU</th><th>合計</th></tr>
+            </thead>
+            <tbody id="practiceStatsBody">
+              <tr><td colspan="4" class="practice-stats-empty">読み込み中…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p id="practiceStatsStatus" class="small-status" aria-live="polite"></p>
+      </section>
+
       <section id="roomPanel" class="room-layout hidden">
         <aside class="side-column">
           <div class="panel status-panel">
@@ -396,6 +421,6 @@
     </dialog>
 
     <script src="./product-config.js?v=practice-20260805-1"></script>
-    <script src="../client-common/app.js?v=shared-09ed0c6e386f"></script>
+    <script src="../client-common/app.js?v=shared-20260808-stats1"></script>
   </body>
 </html>
