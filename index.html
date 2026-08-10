@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>素数大富豪＋</title>
-    <link rel="stylesheet" href="./client-common/styles.css?v=shared-09ed0c6e386f" />
+    <link rel="stylesheet" href="./client-common/styles.css?v=shared-a0b43d03b113" />
     <link rel="stylesheet" href="./theme.css?v=plus-20260805-2" />
   </head>
   <body>
@@ -140,7 +140,18 @@
       </section>
 
       <section id="roomPanel" class="room-layout hidden">
-        <aside class="side-column">
+        <nav id="tournamentWorkspaceTabs" class="tournament-workspace-tabs hidden" data-feature="tournament" aria-label="大会画面">
+          <button id="tournamentLobbyViewTab" class="active" type="button" aria-pressed="true">
+            ロビー
+            <span id="tournamentLobbyUnreadBadge" class="chat-unread hidden" aria-label="ロビーの未読"></span>
+          </button>
+          <button id="tournamentMatchViewTab" type="button" aria-pressed="false">
+            対戦・観戦
+            <span id="tournamentMatchViewBadge" class="tournament-view-badge hidden"></span>
+          </button>
+        </nav>
+
+        <aside id="sideColumn" class="side-column">
           <div class="panel status-panel">
             <div class="room-title-row">
               <div>
@@ -251,7 +262,37 @@
           </details>
         </aside>
 
-        <section class="game-column">
+        <section id="tournamentSpectatorPanel" class="panel tournament-spectator-panel hidden" data-feature="tournament">
+          <div class="tournament-spectator-heading">
+            <div>
+              <p class="eyebrow">LIVE MATCHES</p>
+              <h2>進行中の対戦</h2>
+            </div>
+            <span id="tournamentSpectatorStatus" class="tournament-status-badge">待機中</span>
+          </div>
+          <p class="tournament-spectator-help">観戦する対戦を選んでください。手札の内容は公開されません。</p>
+          <div id="tournamentMatchCards" class="tournament-match-cards"></div>
+          <p id="tournamentSpectatorEmpty" class="tournament-spectator-empty">現在進行中の対戦はありません。</p>
+          <div id="tournamentSpectatorBoard" class="tournament-spectator-board hidden">
+            <div class="tournament-spectator-title-row">
+              <strong id="tournamentSpectatorTitle">対戦を選択してください</strong>
+              <small id="tournamentSpectatorTurn">手番待ち</small>
+            </div>
+            <div class="tournament-spectator-metrics">
+              <div><span>山札</span><strong id="tournamentSpectatorDeck">-</strong></div>
+              <div><span>場</span><strong id="tournamentSpectatorFieldNumber">なし</strong></div>
+              <div><span>観戦</span><strong id="tournamentSpectatorViewerCount">0人</strong></div>
+            </div>
+            <div id="tournamentSpectatorFieldCards" class="field-cards empty">まだ何も出ていません</div>
+            <div id="tournamentSpectatorPlayers" class="tournament-spectator-players"></div>
+            <details id="tournamentSpectatorScore" class="tournament-spectator-score hidden">
+              <summary>数譜を見る</summary>
+              <pre></pre>
+            </details>
+          </div>
+        </section>
+
+        <section id="gameColumn" class="game-column">
           <div class="field-strip">
             <div class="metric">
               <span>山札</span>
@@ -327,15 +368,19 @@
               </div>
             </section>
           </div>
+          <div id="tournamentMatchLogPanel" class="panel tournament-match-log-panel hidden" data-feature="tournament">
+            <h2 class="game-section-title">対戦ログ</h2>
+            <div id="tournamentMatchLogBox" class="log-box"></div>
+          </div>
         </section>
 
-        <aside class="log-column">
+        <aside id="logColumn" class="log-column">
           <div class="panel log-panel">
             <div class="chat-title-row">
-              <h2 class="game-section-title">チャット</h2>
+              <h2 id="chatPanelTitle" class="game-section-title">チャット</h2>
               <div class="chat-tabs" role="tablist" aria-label="チャットの範囲">
                 <button id="roomChatTab" class="chat-tab active" type="button" role="tab" aria-selected="true" aria-controls="roomLogBox">
-                  部屋
+                  <span id="roomChatTabLabel">部屋</span>
                 </button>
                 <button id="globalChatTab" class="chat-tab" data-feature="globalChat" type="button" role="tab" aria-selected="false" aria-controls="globalLogBox">
                   グローバル
@@ -395,6 +440,6 @@
     </dialog>
 
     <script src="./product-config.js?v=plus-20260806-1"></script>
-    <script src="./client-common/app.js?v=shared-09ed0c6e386f"></script>
+    <script src="./client-common/app.js?v=shared-a0b43d03b113"></script>
   </body>
 </html>
