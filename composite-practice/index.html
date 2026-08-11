@@ -6,7 +6,7 @@
     <title>合成数大富豪 練習部屋</title>
     <link rel="stylesheet" href="../client-common/styles.css?v=shared-a0b43d03b113" />
     <link rel="stylesheet" href="../theme.css?v=plus-20260805-2" />
-    <link rel="stylesheet" href="./practice.css?v=practice-20260805-1" />
+    <link rel="stylesheet" href="./practice.css?v=practice-20260812-2" />
   </head>
   <body>
     <section id="practiceAuthGate" class="practice-auth-gate" aria-labelledby="practiceAuthTitle">
@@ -125,6 +125,49 @@
             Plus掲示板は全体5件・1ユーザー1件まで。自分の投稿だけ削除できます。
           </p>
         </div>
+
+        <section id="practiceStatsPanel" class="panel practice-stats-panel" aria-labelledby="practiceStatsTitle">
+          <div class="practice-stats-heading">
+            <div>
+              <p class="eyebrow">COMPOSITE HISTORY</p>
+              <h2 id="practiceStatsTitle">合成数出現カウント</h2>
+            </div>
+            <button id="practiceStatsRefreshBtn" class="ghost-button compact" type="button">更新</button>
+          </div>
+          <p id="practiceStatsStatus" class="practice-stats-status" aria-live="polite">履歴を読み込んでいます…</p>
+          <dl class="practice-stats-totals" aria-label="合成数出現数の集計">
+            <div>
+              <dt>自分</dt>
+              <dd id="practiceStatsOwnerTotal">0</dd>
+            </div>
+            <div>
+              <dt>CPU</dt>
+              <dd id="practiceStatsCpuTotal">0</dd>
+            </div>
+            <div>
+              <dt>合計</dt>
+              <dd id="practiceStatsTotal">0</dd>
+            </div>
+            <div>
+              <dt>種類</dt>
+              <dd id="practiceStatsDistinctTotal">0</dd>
+            </div>
+          </dl>
+          <div class="practice-stats-table-wrap">
+            <table class="practice-stats-table">
+              <thead>
+                <tr>
+                  <th scope="col">合成数</th>
+                  <th scope="col">自分</th>
+                  <th scope="col">CPU</th>
+                  <th scope="col">合計</th>
+                  <th scope="col">最終記録</th>
+                </tr>
+              </thead>
+              <tbody id="practiceStatsBody"></tbody>
+            </table>
+          </div>
+        </section>
 
         <div class="panel guide-panel">
           <h2>遊び方</h2>
@@ -396,6 +439,6 @@
     </dialog>
 
     <script src="./product-config.js?v=practice-20260805-1"></script>
-    <script src="../client-common/app.js?v=shared-a0b43d03b113"></script>
+    <script src="../client-common/app.js?v=shared-a0b43d03b113-stats1"></script>
   </body>
 </html>

@@ -125,6 +125,9 @@ const state = {
   assistTimer: null,
   assistRequestVersion: 0,
   practiceAuthorized: !CONFIG.features.practiceAuth,
+  practiceStats: null,
+  practiceStatsLoading: false,
+  practiceStatsError: "",
 };
 
 const el = {};
@@ -203,6 +206,7 @@ function updatePracticeAuthUi(message) {
 function requestInitialLobbyState() {
   send({ type: "get_room_counts" });
   requestRecruitments();
+  requestCompositePracticeStats();
   if (state.roomJoined) {
     send({ type: "set_name", name: state.playerName });
     send({
@@ -211,6 +215,14 @@ function requestInitialLobbyState() {
       ...(roomResumeToken(currentRoomId()) ? { resume_token: roomResumeToken(currentRoomId()) } : {}),
     });
   }
+}
+
+function requestCompositePracticeStats() {
+  if (!CONFIG.features.practiceAuth || !state.practiceAuthorized || !el.practiceStatsPanel) return;
+  state.practiceStatsLoading = true;
+  state.practiceStatsError = "";
+  renderPracticeStats();
+  send({ type: "get_composite_practice_stats" });
 }
 
 function readPlayerProfile() {
@@ -325,6 +337,14 @@ function bindElements() {
     "roomPickerHint",
     "roomList",
     "practiceBtn",
+    "practiceStatsPanel",
+    "practiceStatsRefreshBtn",
+    "practiceStatsStatus",
+    "practiceStatsOwnerTotal",
+    "practiceStatsCpuTotal",
+    "practiceStatsTotal",
+    "practiceStatsDistinctTotal",
+    "practiceStatsBody",
     "recruitmentCount",
     "recruitmentList",
     "recruitmentForm",
@@ -446,6 +466,9 @@ function bindElements() {
 function bindEvents() {
   const [primaryGroupKey, secondaryGroupKey, tertiaryGroupKey] = CONFIG.roomGroupOrder;
   el.randomNameBtn.addEventListener("click", setRandomName);
+  if (el.practiceStatsRefreshBtn) {
+    el.practiceStatsRefreshBtn.addEventListener("click", requestCompositePracticeStats);
+  }
   el.nameInput.addEventListener("change", persistCurrentName);
   el.nameInput.addEventListener("blur", persistCurrentName);
   el.guestModeToggle.addEventListener("change", toggleGuestMode);
@@ -663,6 +686,12 @@ function handleMessage(msg) {
       } else {
         clearPracticeAccessToken();
       }
+      break;
+    case "composite_practice_stats":
+      state.practiceStats = msg;
+      state.practiceStatsLoading = false;
+      state.practiceStatsError = "";
+      renderPracticeStats();
       break;
     case "room_counts":
       state.roomCounts = msg.counts || {};
@@ -909,6 +938,7 @@ function handleMessage(msg) {
       if (msg.action === "field_flow") {
         showFlowPreview(msg.played_cards || [], msg.number);
       }
+      if (msg.mode === "composite") requestCompositePracticeStats();
       break;
     case "penalty":
       break;
@@ -956,6 +986,11 @@ function handleMessage(msg) {
       if (state.chatMode !== "global") state.globalUnreadCount += 1;
       break;
     case "error":
+      if (msg.code === "practice_authorization_required") {
+        state.practiceStatsLoading = false;
+        state.practiceStatsError = msg.message || "合成数履歴を取得できませんでした。";
+        renderPracticeStats();
+      }
       if (msg.code === "registered_number_limit") {
         el.registerStatus.textContent = msg.message || "登録数が上限を超えています";
       }
@@ -1694,6 +1729,7 @@ function renderAll() {
   renderSoundToggle();
   renderRoomChoice();
   renderRecruitments();
+  renderPracticeStats();
   renderChat();
   el.playStatus.textContent = state.isWaiting
     ? state.roomState === "playing"
@@ -1745,6 +1781,80 @@ function renderAll() {
   renderAssist();
   renderTournament();
   renderTournamentWorkspace();
+}
+
+function renderPracticeStats() {
+  if (!el.practiceStatsPanel || !el.practiceStatsBody) return;
+  const stats = state.practiceStats;
+  const totals = stats?.totals || {};
+  const items = Array.isArray(stats?.items) ? stats.items : [];
+
+  el.practiceStatsOwnerTotal.textContent = formatPracticeStatsCount(totals.owner_count);
+  el.practiceStatsCpuTotal.textContent = formatPracticeStatsCount(totals.cpu_count);
+  el.practiceStatsTotal.textContent = formatPracticeStatsCount(totals.total_count);
+  el.practiceStatsDistinctTotal.textContent = formatPracticeStatsCount(totals.distinct_count);
+  el.practiceStatsRefreshBtn.disabled = state.practiceStatsLoading || !state.connected || !state.practiceAuthorized;
+
+  if (state.practiceStatsError) {
+    el.practiceStatsStatus.textContent = state.practiceStatsError;
+    el.practiceStatsStatus.classList.add("error");
+  } else {
+    el.practiceStatsStatus.classList.remove("error");
+    if (state.practiceStatsLoading) {
+      el.practiceStatsStatus.textContent = "履歴を更新しています…";
+    } else if (!stats) {
+      el.practiceStatsStatus.textContent = "認証後に履歴を読み込みます。";
+    } else if (stats.persistent) {
+      el.practiceStatsStatus.textContent = "Railwayのデータベースに保存されています。";
+    } else {
+      el.practiceStatsStatus.textContent = "現在は一時保存です。サーバー再起動時に履歴が消える可能性があります。";
+    }
+  }
+
+  el.practiceStatsBody.replaceChildren();
+  if (!items.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 5;
+    cell.className = "practice-stats-empty";
+    cell.textContent = stats ? "まだ成功した合成数出しはありません。" : "履歴を読み込んでいます…";
+    row.appendChild(cell);
+    el.practiceStatsBody.appendChild(row);
+    return;
+  }
+
+  items.forEach((item) => {
+    const row = document.createElement("tr");
+    const number = document.createElement("th");
+    number.scope = "row";
+    number.textContent = String(item.number ?? "-");
+    row.appendChild(number);
+    ["owner_count", "cpu_count", "total_count"].forEach((key) => {
+      const cell = document.createElement("td");
+      cell.textContent = formatPracticeStatsCount(item[key]);
+      row.appendChild(cell);
+    });
+    const lastPlayed = document.createElement("td");
+    lastPlayed.textContent = formatPracticeStatsDate(item.last_played_at);
+    row.appendChild(lastPlayed);
+    el.practiceStatsBody.appendChild(row);
+  });
+}
+
+function formatPracticeStatsCount(value) {
+  const count = Number(value);
+  return Number.isFinite(count) && count >= 0 ? Math.trunc(count).toLocaleString("ja-JP") : "0";
+}
+
+function formatPracticeStatsDate(value) {
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat("ja-JP", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function renderRecruitments() {

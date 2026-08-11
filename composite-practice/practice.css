@@ -37,3 +37,118 @@ body.practice-locked .app-shell {
   pointer-events: none;
   user-select: none;
 }
+
+.practice-stats-panel {
+  min-width: 0;
+}
+
+.practice-stats-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.practice-stats-heading h2,
+.practice-stats-heading p,
+.practice-stats-status {
+  margin: 0;
+}
+
+.practice-stats-status {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.practice-stats-status.error {
+  color: var(--red);
+}
+
+.practice-stats-totals {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.practice-stats-totals > div {
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper, #f7faf9);
+  padding: 9px;
+  text-align: center;
+}
+
+.practice-stats-totals dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.practice-stats-totals dd {
+  margin: 0;
+  color: var(--accent-dark);
+  font-size: 1.15rem;
+  font-weight: 900;
+}
+
+.practice-stats-table-wrap {
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.practice-stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.practice-stats-table th,
+.practice-stats-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 9px 10px;
+  text-align: right;
+}
+
+.practice-stats-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.practice-stats-table th:first-child,
+.practice-stats-table td:first-child {
+  text-align: left;
+}
+
+.practice-stats-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.practice-stats-table tbody th {
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.practice-stats-empty {
+  padding: 20px !important;
+  color: var(--muted);
+  text-align: center !important;
+  white-space: normal;
+}
+
+@media (max-width: 520px) {
+  .practice-stats-totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
