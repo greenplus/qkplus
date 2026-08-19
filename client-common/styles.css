@@ -1219,6 +1219,10 @@ textarea {
   align-items: stretch;
 }
 
+.field-strip.turn-clock-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .field-strip > div {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1302,6 +1306,27 @@ textarea {
 .metric strong {
   font-size: 1.16rem;
   line-height: 1;
+}
+
+.turn-clock-metric {
+  font-variant-numeric: tabular-nums;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.field-strip > .turn-clock-metric.warning {
+  border-color: #dfb24c;
+  background: #fff8df;
+  color: #9b6500;
+}
+
+.field-strip > .turn-clock-metric.danger {
+  border-color: #dd8b82;
+  background: #fff0ee;
+  color: var(--red);
+}
+
+.turn-clock-metric.count-up strong {
+  color: var(--muted);
 }
 
 .assist-panel,
@@ -1541,6 +1566,25 @@ textarea {
   color: #23649b;
 }
 
+.turn-badge.clock-warning {
+  background: #fff0bd;
+  color: #8b5b00;
+}
+
+.turn-badge.clock-danger {
+  background: #fde0dc;
+  color: var(--red);
+}
+
+.turn-badge.ready.clock-urgent {
+  animation: turn-clock-pulse 900ms ease-in-out infinite alternate;
+}
+
+@keyframes turn-clock-pulse {
+  from { box-shadow: 0 0 0 0 rgba(198, 40, 40, 0); }
+  to { box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.2); }
+}
+
 .log-panel {
   min-height: 520px;
   display: grid;
@@ -1575,6 +1619,10 @@ body[data-mode="playing"] .room-title-row h2 {
 
 body[data-mode="playing"] .field-strip {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+body[data-mode="playing"] .field-strip.turn-clock-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 body[data-mode="playing"] .field-zone {
@@ -2109,6 +2157,19 @@ body[data-mode="playing"] .site-footer {
   padding: 24px 4px 0;
   color: var(--muted);
   text-align: center;
+}
+
+@media (max-width: 360px) {
+  .field-strip.turn-clock-strip,
+  body[data-mode="playing"] .field-strip.turn-clock-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turn-badge.ready.clock-urgent {
+    animation: none;
+  }
 }
 
 @media (max-width: 760px) {

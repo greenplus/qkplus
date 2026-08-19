@@ -63,6 +63,13 @@ const state = {
   roomCountsLoaded: false,
   roomCountsTimer: null,
   reconnectTimer: null,
+  turnClockTimer: null,
+  serverOffsetMs: 0,
+  turnSeq: null,
+  turnStartedAtMs: null,
+  turnDeadlineAtMs: null,
+  turnTimeLimitSeconds: null,
+  turnTimeoutEnabled: false,
   recruitments: [],
   recruitmentMaxCount: 5,
   recruitmentSubmitPending: false,
@@ -73,6 +80,7 @@ const state = {
   roomCpuProfiles: {},
   roomHnpChallengeEnabled: {},
   roomRegisteredNumberLimits: {},
+  roomTurnTimeLimits: {},
   tournaments: {},
   tournament: null,
   tournamentParticipantId: null,
@@ -141,6 +149,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initializeRecruitmentForm();
   initializePracticeAuth();
   connect();
+  state.turnClockTimer = window.setInterval(renderTurnClock, 1000);
   if (CONFIG.features.tournament) {
     state.tournamentCountdownTimer = window.setInterval(renderTournamentCallCountdown, 1000);
   }
@@ -389,6 +398,9 @@ function bindElements() {
     "opponentMetric",
     "opponentLabel",
     "opponentCounts",
+    "turnClockMetric",
+    "turnClockLabel",
+    "turnClockValue",
     "assistRecommendedBtn",
     "assistStrongBtn",
     "assistEasyBtn",
@@ -702,6 +714,7 @@ function handleMessage(msg) {
       state.roomCpuProfiles = msg.cpu_profiles || {};
       state.roomHnpChallengeEnabled = msg.hnp_challenge_enabled || {};
       state.roomRegisteredNumberLimits = msg.registered_number_limits || {};
+      state.roomTurnTimeLimits = msg.turn_time_limits || {};
       state.roomAllowComposite = msg.allow_composite || {};
       state.roomAssistEnabled = msg.assist_enabled || {};
       state.tournaments = msg.tournaments || {};
@@ -742,6 +755,7 @@ function handleMessage(msg) {
       state.appMode = msg.room_state === "playing" ? "playing" : "room";
       state.playingDisconnectGraceSeconds = msg.playing_disconnect_grace_seconds ?? state.playingDisconnectGraceSeconds;
       state.waitingDisconnectGraceSeconds = msg.waiting_disconnect_grace_seconds ?? state.waitingDisconnectGraceSeconds;
+      syncTurnClock(msg);
       if (typeof msg.hnp_challenge_enabled === "boolean") {
         state.hnpChallengeEnabled = CONFIG.features.hnpChallenge && msg.hnp_challenge_enabled;
       }
@@ -771,6 +785,7 @@ function handleMessage(msg) {
       break;
     case "room_left":
       if (msg.room_id) removeRoomResumeToken(msg.room_id);
+      clearTurnClock();
       break;
     case "update_room_status":
       if (msg.room_id === currentRoomId()) {
@@ -826,6 +841,7 @@ function handleMessage(msg) {
       state.tournamentWorkspaceMode = "lobby";
       state.tournamentObservedMatchId = null;
       state.tournamentObservedMatch = null;
+      clearTurnClock();
       if (msg.room_id) removeRoomResumeToken(msg.room_id);
       log("system", msg.message || "この参加情報は別のタブへ引き継がれました。");
       break;
@@ -854,6 +870,7 @@ function handleMessage(msg) {
       state.tournamentWorkspaceMode = "lobby";
       state.tournamentObservedMatchId = null;
       state.tournamentObservedMatch = null;
+      clearTurnClock();
       log("system", "大会ロビーへ戻りました。");
       break;
     case "tournament_match_summary":
@@ -890,6 +907,7 @@ function handleMessage(msg) {
       state.appMode = "playing";
       state.roomState = "playing";
       state.firstPlayerId = null;
+      syncTurnClock(msg);
       if (typeof msg.hnp_challenge_enabled === "boolean") state.hnpChallengeEnabled = msg.hnp_challenge_enabled;
       clearFlowPreview(false);
       clearSelection();
@@ -910,6 +928,7 @@ function handleMessage(msg) {
       state.currentTurn = msg.current_turn || "";
       state.firstPlayerId = msg.first_player_id || state.firstPlayerId;
       state.currentRoomHasCpu = (msg.player_list || []).some((player) => player.is_cpu);
+      syncTurnClock(msg);
       if (isTournamentRoom() && msg.tournament) setTournamentState(msg.tournament);
       if (typeof msg.hnp_challenge_enabled === "boolean") state.hnpChallengeEnabled = msg.hnp_challenge_enabled;
       renderField(msg);
@@ -919,6 +938,7 @@ function handleMessage(msg) {
     case "turn_update":
     case "next_turn":
       state.currentTurn = msg.current_turn || "";
+      syncTurnClock(msg);
       scheduleAssist();
       break;
     case "prime_assist_result":
@@ -949,6 +969,7 @@ function handleMessage(msg) {
       state.appMode = "room";
       state.hand = [];
       state.firstPlayerId = null;
+      clearTurnClock();
       clearFlowPreview(false);
       clearSelection();
       break;
@@ -1009,6 +1030,7 @@ function handleMessage(msg) {
 
 function setTournamentState(tournament) {
   state.tournament = tournament;
+  (tournament?.active_matches || []).forEach((match) => syncServerClock(match.server_now));
   if (tournament?.room_id) state.tournaments[tournament.room_id] = tournament;
   if (tournament?.viewer_participant_id) {
     state.tournamentParticipantId = tournament.viewer_participant_id;
@@ -1017,6 +1039,7 @@ function setTournamentState(tournament) {
 
 function updateTournamentMatchSummary(match) {
   if (!match || !state.tournament) return;
+  syncServerClock(match.server_now);
   const matches = [...(state.tournament.active_matches || [])];
   const index = matches.findIndex((item) => item.match_id === match.match_id);
   if (index >= 0) matches[index] = { ...matches[index], ...match };
@@ -1433,6 +1456,7 @@ function leaveRoom() {
   state.fieldCards = [];
   state.handCounts = [];
   state.firstPlayerId = null;
+  clearTurnClock();
   state.tournamentWorkspaceMode = "lobby";
   state.tournamentLobbyUnreadCount = 0;
   state.tournamentMatchUnreadCount = 0;
@@ -1722,6 +1746,113 @@ function renderOpponentCounts(handCounts) {
   el.opponentMetric.setAttribute("aria-label", description);
 }
 
+function parseClockTime(value) {
+  const parsed = Date.parse(value || "");
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function syncServerClock(serverNow) {
+  const serverNowMs = parseClockTime(serverNow);
+  if (serverNowMs !== null) state.serverOffsetMs = serverNowMs - Date.now();
+}
+
+function syncTurnClock(message) {
+  syncServerClock(message?.server_now);
+  if (!message || !Object.prototype.hasOwnProperty.call(message, "turn_started_at")) return;
+  state.turnSeq = message.turn_seq ?? null;
+  state.turnStartedAtMs = parseClockTime(message.turn_started_at);
+  state.turnDeadlineAtMs = parseClockTime(message.turn_deadline_at);
+  state.turnTimeLimitSeconds = message.turn_time_limit_seconds == null
+    ? null
+    : Number(message.turn_time_limit_seconds);
+  state.turnTimeoutEnabled = message.turn_timeout_enabled === true;
+  renderTurnClock();
+}
+
+function clearTurnClock() {
+  state.turnSeq = null;
+  state.turnStartedAtMs = null;
+  state.turnDeadlineAtMs = null;
+  state.turnTimeLimitSeconds = null;
+  state.turnTimeoutEnabled = false;
+  renderTurnClock();
+}
+
+function clockSnapshot(source) {
+  const startedAtMs = Number.isFinite(source?.turnStartedAtMs)
+    ? source.turnStartedAtMs
+    : parseClockTime(source?.turn_started_at);
+  const deadlineAtMs = Number.isFinite(source?.turnDeadlineAtMs)
+    ? source.turnDeadlineAtMs
+    : parseClockTime(source?.turn_deadline_at);
+  const timeoutEnabled = source?.turnTimeoutEnabled === true || source?.turn_timeout_enabled === true;
+  if (startedAtMs === null) return null;
+  const serverNowMs = Date.now() + state.serverOffsetMs;
+  if (timeoutEnabled && deadlineAtMs !== null) {
+    return {
+      label: "残り",
+      seconds: Math.max(0, Math.ceil((deadlineAtMs - serverNowMs) / 1000)),
+      timed: true,
+    };
+  }
+  return {
+    label: "経過",
+    seconds: Math.max(0, Math.floor((serverNowMs - startedAtMs) / 1000)),
+    timed: false,
+  };
+}
+
+function formatTurnClock(seconds) {
+  const total = Math.max(0, Math.trunc(seconds));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function renderTurnClock() {
+  const snapshot = state.roomState === "playing" ? clockSnapshot(state) : null;
+  if (el.turnClockMetric && el.turnClockLabel && el.turnClockValue) {
+    el.turnClockLabel.textContent = snapshot?.label || "時間";
+    el.turnClockValue.textContent = snapshot ? formatTurnClock(snapshot.seconds) : "--";
+    const warning = Boolean(snapshot?.timed && snapshot.seconds <= 20 && snapshot.seconds > 10);
+    const danger = Boolean(snapshot?.timed && snapshot.seconds <= 10);
+    const urgent = Boolean(snapshot?.timed && snapshot.seconds <= 5);
+    el.turnClockMetric.classList.toggle("warning", warning);
+    el.turnClockMetric.classList.toggle("danger", danger);
+    el.turnClockMetric.classList.toggle("urgent", urgent);
+    el.turnClockMetric.classList.toggle("count-up", Boolean(snapshot && !snapshot.timed));
+    const description = snapshot
+      ? `${snapshot.timed ? "手番の残り時間" : "手番の経過時間"} ${formatTurnClock(snapshot.seconds)}`
+      : "手番時間 未設定";
+    el.turnClockMetric.title = description;
+    el.turnClockMetric.setAttribute("aria-label", description);
+  }
+  if (el.turnBadge) {
+    el.turnBadge.classList.toggle("clock-warning", Boolean(snapshot?.timed && snapshot.seconds <= 20 && snapshot.seconds > 10));
+    el.turnBadge.classList.toggle("clock-danger", Boolean(snapshot?.timed && snapshot.seconds <= 10));
+    el.turnBadge.classList.toggle("clock-urgent", Boolean(snapshot?.timed && snapshot.seconds <= 5));
+  }
+  renderTournamentSpectatorTurnClock();
+}
+
+function renderTournamentSpectatorTurnClock() {
+  if (!el.tournamentSpectatorTurn) return;
+  const activeMatches = state.tournament?.active_matches || [];
+  const selected = state.tournamentObservedMatch
+    || activeMatches.find((match) => match.match_id === state.tournamentObservedMatchId)
+    || null;
+  if (!selected) return;
+  if (selected.winner_name) {
+    el.tournamentSpectatorTurn.textContent = `勝者 ${selected.winner_name}`;
+    return;
+  }
+  if (!selected.current_turn) {
+    el.tournamentSpectatorTurn.textContent = "開始待ち";
+    return;
+  }
+  const snapshot = selected.status === "playing" ? clockSnapshot(selected) : null;
+  const clockText = snapshot ? ` · ${snapshot.label} ${formatTurnClock(snapshot.seconds)}` : "";
+  el.tournamentSpectatorTurn.textContent = `${selected.current_turn}の手番${clockText}`;
+}
+
 function renderAll() {
   document.body.dataset.mode = state.appMode;
   el.setupPanel.classList.toggle("hidden", state.appMode !== "setup");
@@ -1775,6 +1906,7 @@ function renderAll() {
   el.turnBadge.classList.toggle("ready", isMyTurn());
   el.turnBadge.classList.toggle("alert", state.roomState === "playing" && state.isWaiting && !isMyTurn());
   el.turnBadge.classList.toggle("spectating", watchingTurn);
+  renderTurnClock();
   renderHandMetrics();
   renderNextHint();
   renderHand();
@@ -2035,9 +2167,10 @@ function renderTournament() {
   }
   if (el.tournamentTimingNote) {
     const readySeconds = tournament?.match_ready_seconds ?? 60;
+    const turnSeconds = tournament?.turn_time_limit_seconds ?? 60;
     const playingSeconds = tournament?.playing_disconnect_grace_seconds ?? 60;
     const waitingSeconds = tournament?.waiting_disconnect_grace_seconds ?? 180;
-    el.tournamentTimingNote.textContent = `対戦呼び出しは両者確認で即開始、未確認でも両者接続中なら${readySeconds}秒後に自動開始します。切断復帰猶予は対戦中${formatDuration(playingSeconds)}、ロビー待機中${formatDuration(waitingSeconds)}です。復帰トークンはこのブラウザだけに保存します。`;
+    el.tournamentTimingNote.textContent = `対局は1手${turnSeconds}秒で、時間切れは自動パスです。対戦呼び出しは両者確認で即開始、未確認でも両者接続中なら${readySeconds}秒後に自動開始します。切断復帰猶予は対戦中${formatDuration(playingSeconds)}、ロビー待機中${formatDuration(waitingSeconds)}です。復帰トークンはこのブラウザだけに保存します。`;
   }
 }
 
@@ -2194,6 +2327,7 @@ function renderTournamentSpectator(activeMatches) {
   el.tournamentSpectatorScore.classList.toggle("hidden", !scoreLines.length);
   const scorePre = el.tournamentSpectatorScore.querySelector("pre");
   if (scorePre) scorePre.textContent = scoreLines.join("\n");
+  renderTournamentSpectatorTurnClock();
 }
 
 function tournamentPairingNote(pairing, isViewerMatch, viewerReady) {
@@ -2420,7 +2554,11 @@ function renderRoomChoice() {
     ? "大会ロビーに入室する"
     : `${room.label} ルーム${room.roomNumber}に入室する`;
   el.practiceBtn.disabled = !state.connected || !isRoomSelectable(state.selectedRoomKey);
-  el.roomBadge.textContent = room.badge;
+  const turnTimeLimit = state.roomTurnTimeLimits[roomId];
+  const turnClockBadge = Number.isFinite(turnTimeLimit)
+    ? room.tournament ? `${turnTimeLimit}秒` : `対人${turnTimeLimit}秒`
+    : "";
+  el.roomBadge.textContent = [room.badge, turnClockBadge].filter(Boolean).join(" / ");
   el.roomHeading.textContent = room.tournament
     ? "大会ロビー"
     : `${room.label}ルーム ${room.roomNumber}`;
@@ -2519,7 +2657,11 @@ function renderRoomList() {
 
     const ruleSummary = document.createElement("small");
     ruleSummary.className = "room-slot-summary";
-    ruleSummary.textContent = room.summary || "";
+    const turnTimeLimit = state.roomTurnTimeLimits[room.roomId];
+    const turnClockSummary = Number.isFinite(turnTimeLimit)
+      ? room.tournament ? `${turnTimeLimit}秒・時間切れはパス` : `対人${turnTimeLimit}秒`
+      : "";
+    ruleSummary.textContent = [room.summary, turnClockSummary].filter(Boolean).join(" / ");
 
     const population = document.createElement("span");
     population.className = "room-slot-population";

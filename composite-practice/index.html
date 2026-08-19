@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>合成数大富豪 練習部屋</title>
-    <link rel="stylesheet" href="../client-common/styles.css?v=shared-b176eaf8a4c5" />
+    <link rel="stylesheet" href="../client-common/styles.css?v=shared-fddc746f3741" />
     <link rel="stylesheet" href="../theme.css?v=plus-20260805-2" />
     <link rel="stylesheet" href="./practice.css?v=practice-20260812-2" />
   </head>
@@ -296,7 +296,7 @@
         </aside>
 
         <section class="game-column">
-          <div class="field-strip">
+          <div class="field-strip turn-clock-strip">
             <div class="metric">
               <span>山札</span>
               <strong id="deckCount">-</strong>
@@ -308,6 +308,10 @@
             <div id="opponentMetric" class="metric">
               <span id="opponentLabel">相手</span>
               <strong id="opponentCounts">-</strong>
+            </div>
+            <div id="turnClockMetric" class="metric turn-clock-metric" aria-label="手番時間 未設定">
+              <span id="turnClockLabel">時間</span>
+              <strong id="turnClockValue">--</strong>
             </div>
             <div id="fieldZone" class="field-zone">
               <h2 class="game-section-title">場：<span id="fieldNumber">なし</span></h2>
@@ -439,6 +443,6 @@
     </dialog>
 
     <script src="./product-config.js?v=practice-20260805-1"></script>
-    <script src="../client-common/app.js?v=shared-b176eaf8a4c5"></script>
+    <script src="../client-common/app.js?v=shared-fddc746f3741"></script>
   </body>
 </html>
