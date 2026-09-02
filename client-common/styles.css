@@ -732,6 +732,93 @@ textarea,
   line-height: 1.65;
 }
 
+.turn-order-settings {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbf9;
+}
+
+.turn-order-settings summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  color: var(--accent-dark);
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.turn-order-settings[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.turn-order-setting-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.55fr);
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px 0;
+}
+
+.turn-alternation-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+}
+
+.turn-alternation-option input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  flex: 0 0 auto;
+}
+
+.turn-alternation-option span {
+  display: grid;
+  gap: 3px;
+}
+
+.turn-alternation-option small,
+.turn-order-first-choice span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.turn-order-first-choice {
+  display: grid;
+  gap: 5px;
+}
+
+.turn-order-first-choice .full-select {
+  min-height: 38px;
+  padding: 0 9px;
+}
+
+.turn-order-settings > .microcopy {
+  margin: 8px 12px 12px;
+  font-size: 0.78rem;
+}
+
+.start-request-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 12px 12px;
+  border-left: 4px solid #d29b14;
+  border-radius: 7px;
+  background: var(--yellow);
+  padding: 9px 10px;
+  color: #735600;
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+body[data-mode="playing"] .turn-order-settings {
+  display: none;
+}
+
 .plain-steps {
   margin: 18px 0 0;
   padding-left: 1.3em;
@@ -1189,6 +1276,31 @@ textarea,
   color: #6f5814;
   font-size: 0.82rem;
   font-weight: 800;
+  line-height: 1.5;
+}
+
+.register-customization-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.register-customization-toggle input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.register-customization-note {
+  margin-top: -4px;
+  color: var(--muted);
+  font-size: 0.78rem;
   line-height: 1.5;
 }
 
@@ -1823,6 +1935,25 @@ body[data-mode="playing"] .side-column {
   color: var(--ink);
 }
 
+.chat-action-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 1px 9px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 0.76rem;
+  font-weight: 850;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.chat-action-link:hover {
+  text-decoration: underline;
+}
+
 .global-chat-line {
   display: grid;
   gap: 4px;
@@ -1940,6 +2071,45 @@ body[data-mode="playing"] .side-column {
   border-radius: 12px;
   background: transparent;
   padding: 0;
+}
+
+.start-game-approval-dialog {
+  width: min(92vw, 500px);
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  padding: 0;
+}
+
+.start-game-approval-dialog::backdrop {
+  background: rgba(10, 26, 19, 0.62);
+  backdrop-filter: blur(2px);
+}
+
+.start-game-approval-card {
+  border: 1px solid var(--line);
+  border-top: 5px solid var(--accent);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 24px;
+  box-shadow: 0 20px 70px rgba(10, 26, 19, 0.26);
+}
+
+.start-game-approval-card h2 {
+  margin-top: 5px;
+  color: var(--accent-dark);
+  font-size: 1.3rem;
+}
+
+.start-game-approval-text {
+  margin-top: 14px;
+  color: var(--ink);
+  line-height: 1.75;
+}
+
+.start-game-approval-actions {
+  justify-content: flex-end;
+  margin-top: 20px;
 }
 
 .campaign-result-dialog::backdrop {
@@ -2173,6 +2343,15 @@ body[data-mode="playing"] .site-footer {
 }
 
 @media (max-width: 760px) {
+  .turn-order-setting-row {
+    grid-template-columns: 1fr;
+  }
+
+  .start-game-approval-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
   .recruitment-card {
     grid-template-columns: minmax(112px, 0.8fr) minmax(0, 1fr);
   }

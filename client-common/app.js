@@ -17,10 +17,12 @@ const CONFIG = {
     registration: false,
     hnpChallenge: false,
     campaign: false,
+    largestPrimeShare: false,
     globalChat: false,
     tournament: false,
     recruitment: false,
     practiceAuth: false,
+    turnAlternation: false,
     ...(PRODUCT_CONFIG.features || {}),
   },
   roomGroupOrder,
@@ -36,6 +38,7 @@ const GUEST_NAME_KEY = "prime-daifugo-" + CONFIG.productKey + "-guest-name";
 const RECRUITMENT_OWNER_KEY = "prime-daifugo-" + CONFIG.productKey + "-recruitment-owner";
 const RECRUITMENT_GUEST_OWNER_KEY = RECRUITMENT_OWNER_KEY + "-guest";
 const PRACTICE_ACCESS_TOKEN_KEY = "prime-daifugo-" + CONFIG.productKey + "-practice-access-token";
+const REGISTERED_CUSTOMIZATION_KEY = "prime-daifugo-" + CONFIG.productKey + "-registered-customizations-v1";
 const PLAYER_JOINED_SOUND_URL = CONFIG.playerJoinedSoundUrl || "./assets/sounds/player-joined.mp3";
 let playerJoinedAudio = null;
 let soundUnlockPromise = null;
@@ -101,6 +104,9 @@ const state = {
   globalUnreadCount: 0,
   registeredPrimeValues: new Set(),
   registeredCompositeValues: new Set(),
+  registeredCustomizations: readRegisteredCustomizations(),
+  acceptedRegistrationByGroup: {},
+  pendingRegistrationRequest: null,
   sampleOptions: [],
   deckCount: "-",
   fieldNumber: "",
@@ -130,12 +136,13 @@ const state = {
   sampleLoadedForFlow: false,
   cpuRequestedForFlow: false,
   startRequestedForFlow: false,
+  turnAlternationEnabled: false,
+  turnAlternationFirst: "random",
+  startGameRequest: null,
+  startGameRequestActionPending: false,
   assistTimer: null,
   assistRequestVersion: 0,
   practiceAuthorized: !CONFIG.features.practiceAuth,
-  practiceStats: null,
-  practiceStatsLoading: false,
-  practiceStatsError: "",
 };
 
 const el = {};
@@ -149,7 +156,10 @@ document.addEventListener("DOMContentLoaded", () => {
   initializeRecruitmentForm();
   initializePracticeAuth();
   connect();
-  state.turnClockTimer = window.setInterval(renderTurnClock, 1000);
+  state.turnClockTimer = window.setInterval(() => {
+    renderTurnClock();
+    renderStartGameRequest();
+  }, 1000);
   if (CONFIG.features.tournament) {
     state.tournamentCountdownTimer = window.setInterval(renderTournamentCallCountdown, 1000);
   }
@@ -215,7 +225,6 @@ function updatePracticeAuthUi(message) {
 function requestInitialLobbyState() {
   send({ type: "get_room_counts" });
   requestRecruitments();
-  requestCompositePracticeStats();
   if (state.roomJoined || state.pendingFlow) {
     const resumeToken = roomResumeToken(currentRoomId());
     send({ type: "set_name", name: state.playerName });
@@ -226,14 +235,6 @@ function requestInitialLobbyState() {
       ...(resumeToken ? { resume_token: resumeToken } : {}),
     });
   }
-}
-
-function requestCompositePracticeStats() {
-  if (!CONFIG.features.practiceAuth || !state.practiceAuthorized || !el.practiceStatsPanel) return;
-  state.practiceStatsLoading = true;
-  state.practiceStatsError = "";
-  renderPracticeStats();
-  send({ type: "get_composite_practice_stats" });
 }
 
 function readPlayerProfile() {
@@ -348,14 +349,6 @@ function bindElements() {
     "roomPickerHint",
     "roomList",
     "practiceBtn",
-    "practiceStatsPanel",
-    "practiceStatsRefreshBtn",
-    "practiceStatsStatus",
-    "practiceStatsOwnerTotal",
-    "practiceStatsCpuTotal",
-    "practiceStatsTotal",
-    "practiceStatsDistinctTotal",
-    "practiceStatsBody",
     "recruitmentCount",
     "recruitmentList",
     "recruitmentForm",
@@ -375,6 +368,18 @@ function bindElements() {
     "readyBtn",
     "addCpuBtn",
     "startBtn",
+    "turnOrderSettings",
+    "turnAlternationToggle",
+    "turnAlternationFirstSelect",
+    "turnAlternationNote",
+    "startRequestPanel",
+    "startRequestText",
+    "cancelStartRequestBtn",
+    "startGameApprovalDialog",
+    "startGameApprovalText",
+    "startGameApprovalCountdown",
+    "rejectStartGameBtn",
+    "approveStartGameBtn",
     "reconnectPolicyNote",
     "cpuChooser",
     "cpuProfileSelect",
@@ -388,6 +393,8 @@ function bindElements() {
     "saveRegisterBtn",
     "registerStatus",
     "registerLimitNote",
+    "saveCustomizationToggle",
+    "saveCustomizationNote",
     "fieldZone",
     "fieldNumber",
     "fieldCards",
@@ -480,9 +487,6 @@ function bindElements() {
 function bindEvents() {
   const [primaryGroupKey, secondaryGroupKey, tertiaryGroupKey] = CONFIG.roomGroupOrder;
   el.randomNameBtn.addEventListener("click", setRandomName);
-  if (el.practiceStatsRefreshBtn) {
-    el.practiceStatsRefreshBtn.addEventListener("click", requestCompositePracticeStats);
-  }
   el.nameInput.addEventListener("change", persistCurrentName);
   el.nameInput.addEventListener("blur", persistCurrentName);
   el.guestModeToggle.addEventListener("change", toggleGuestMode);
@@ -511,8 +515,37 @@ function bindEvents() {
   el.cpuChooserCloseBtn.addEventListener("click", closeCpuChooser);
   el.confirmCpuBtn.addEventListener("click", confirmCpuSelection);
   el.startBtn.addEventListener("click", startGame);
+  if (el.turnAlternationToggle) {
+    el.turnAlternationToggle.addEventListener("change", () => {
+      state.turnAlternationEnabled = el.turnAlternationToggle.checked;
+      renderTurnOrderSettings();
+    });
+  }
+  if (el.turnAlternationFirstSelect) {
+    el.turnAlternationFirstSelect.addEventListener("change", () => {
+      state.turnAlternationFirst = el.turnAlternationFirstSelect.value;
+    });
+  }
+  if (el.cancelStartRequestBtn) {
+    el.cancelStartRequestBtn.addEventListener("click", cancelStartGameRequest);
+  }
+  if (el.approveStartGameBtn) {
+    el.approveStartGameBtn.addEventListener("click", () => respondToStartGameRequest(true));
+  }
+  if (el.rejectStartGameBtn) {
+    el.rejectStartGameBtn.addEventListener("click", () => respondToStartGameRequest(false));
+  }
+  if (el.startGameApprovalDialog) {
+    el.startGameApprovalDialog.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      respondToStartGameRequest(false);
+    });
+  }
   el.sampleBtn.addEventListener("click", loadSample);
   el.saveRegisterBtn.addEventListener("click", saveRegisteredNumbers);
+  if (el.saveCustomizationToggle) {
+    el.saveCustomizationToggle.addEventListener("change", toggleRegisteredCustomization);
+  }
   el.clearSelectionBtn.addEventListener("click", clearSelection);
   el.compositeModeBtn.addEventListener("click", toggleCompositeMode);
   el.compositeMulBtn.addEventListener("click", () => addCompositeOp("×"));
@@ -576,6 +609,116 @@ function isTournamentRoom() {
 
 function currentRoomGroupOption() {
   return CONFIG.roomGroups[state.selectedRoomGroupKey] || CONFIG.roomGroups[CONFIG.defaultRoomGroupKey];
+}
+
+function registeredCustomizationGroupKey() {
+  return currentRoomOption().roomGroupKey || state.selectedRoomGroupKey;
+}
+
+function readRegisteredCustomizations() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(REGISTERED_CUSTOMIZATION_KEY) || "{}");
+    const groups = parsed?.groups && typeof parsed.groups === "object" ? parsed.groups : parsed;
+    const result = {};
+    CONFIG.roomGroupOrder.forEach((groupKey) => {
+      const item = groups?.[groupKey];
+      if (!item || typeof item !== "object" || item.enabled !== true) return;
+      result[groupKey] = {
+        enabled: true,
+        prime_text: typeof item.prime_text === "string" ? item.prime_text : "",
+        composite_text: typeof item.composite_text === "string" ? item.composite_text : "",
+        updated_at: typeof item.updated_at === "string" ? item.updated_at : "",
+      };
+    });
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+function writeRegisteredCustomizations() {
+  try {
+    localStorage.setItem(REGISTERED_CUSTOMIZATION_KEY, JSON.stringify({
+      version: 1,
+      groups: state.registeredCustomizations,
+    }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function currentRegisteredCustomization(groupKey = registeredCustomizationGroupKey()) {
+  return state.registeredCustomizations[groupKey] || null;
+}
+
+function hasSavedRegisteredCustomization(groupKey = registeredCustomizationGroupKey()) {
+  const customization = currentRegisteredCustomization(groupKey);
+  return Boolean(customization?.enabled && customization.updated_at);
+}
+
+function rememberAcceptedRegistration(groupKey, primeText, compositeText) {
+  const accepted = {
+    prime_text: String(primeText ?? ""),
+    composite_text: String(compositeText ?? ""),
+  };
+  state.acceptedRegistrationByGroup[groupKey] = accepted;
+  const customization = currentRegisteredCustomization(groupKey);
+  if (!customization?.enabled) return null;
+  state.registeredCustomizations[groupKey] = {
+    enabled: true,
+    ...accepted,
+    updated_at: new Date().toISOString(),
+  };
+  return writeRegisteredCustomizations();
+}
+
+function toggleRegisteredCustomization() {
+  if (!el.saveCustomizationToggle) return;
+  const groupKey = registeredCustomizationGroupKey();
+  if (!el.saveCustomizationToggle.checked) {
+    delete state.registeredCustomizations[groupKey];
+    const removed = writeRegisteredCustomizations();
+    el.registerStatus.textContent = removed
+      ? `${currentRoomGroupOption().label}の保存を解除しました。現在の対局中は内容を維持します。`
+      : "ブラウザの保存設定を解除できませんでした。";
+    renderRegisteredCustomization();
+    return;
+  }
+
+  state.registeredCustomizations[groupKey] = {
+    enabled: true,
+    prime_text: "",
+    composite_text: "",
+    updated_at: "",
+  };
+  const accepted = state.acceptedRegistrationByGroup[groupKey];
+  const saved = accepted
+    ? rememberAcceptedRegistration(groupKey, accepted.prime_text, accepted.composite_text)
+    : writeRegisteredCustomizations();
+  if (!saved) {
+    delete state.registeredCustomizations[groupKey];
+    el.saveCustomizationToggle.checked = false;
+    el.registerStatus.textContent = "ブラウザにカスタマイズを保存できませんでした。";
+  } else {
+    el.registerStatus.textContent = accepted
+      ? `${currentRoomGroupOption().label}の現在の登録内容を保存しました。`
+      : "次に登録またはサンプル読込した内容を保存します。";
+  }
+  renderRegisteredCustomization();
+}
+
+function renderRegisteredCustomization() {
+  if (!el.saveCustomizationToggle || !el.saveCustomizationNote) return;
+  const groupKey = registeredCustomizationGroupKey();
+  const customization = currentRegisteredCustomization(groupKey);
+  const groupLabel = CONFIG.roomGroups[groupKey]?.label || currentRoomGroupOption().label;
+  el.saveCustomizationToggle.checked = Boolean(customization?.enabled);
+  el.saveCustomizationNote.textContent = customization?.enabled
+    ? customization.updated_at
+      ? `${groupLabel}用としてこのブラウザに保存済みです。`
+      : `${groupLabel}で次に登録またはサンプル読込した内容を保存します。`
+    : `${groupLabel}では入室時に部屋の既定表を読み込みます。`;
 }
 
 function selectRoomGroup(roomGroupKey) {
@@ -660,6 +803,7 @@ function connect() {
 
   state.ws.addEventListener("close", () => {
     state.connected = false;
+    clearStartGameRequest();
     state.recruitmentSubmitPending = false;
     state.globalChatSubscribed = false;
     state.globalChatJoining = false;
@@ -700,12 +844,6 @@ function handleMessage(msg) {
       } else {
         clearPracticeAccessToken();
       }
-      break;
-    case "composite_practice_stats":
-      state.practiceStats = msg;
-      state.practiceStatsLoading = false;
-      state.practiceStatsError = "";
-      renderPracticeStats();
       break;
     case "room_counts":
       state.roomCounts = msg.counts || {};
@@ -785,6 +923,7 @@ function handleMessage(msg) {
       break;
     case "room_left":
       if (msg.room_id) removeRoomResumeToken(msg.room_id);
+      clearStartGameRequest();
       clearTurnClock();
       break;
     case "update_room_status":
@@ -834,6 +973,9 @@ function handleMessage(msg) {
       break;
     }
     case "session_replaced":
+      clearStartGameRequest();
+      state.turnAlternationEnabled = false;
+      state.turnAlternationFirst = "random";
       state.roomJoined = false;
       state.appMode = "setup";
       state.roomState = "waiting";
@@ -903,7 +1045,27 @@ function handleMessage(msg) {
       state.sampleLoadedForFlow = true;
       continuePendingFlowAfterRegistration();
       break;
+    case "start_game_request_pending":
+      syncServerClock(msg.server_now);
+      state.startGameRequest = { ...msg, role: "requester" };
+      state.startGameRequestActionPending = false;
+      log("system", `${msg.opponent_name || "相手"}へ手番交互の開始申請を送りました。`);
+      break;
+    case "start_game_approval_required":
+      syncServerClock(msg.server_now);
+      state.startGameRequest = { ...msg, role: "opponent" };
+      state.startGameRequestActionPending = false;
+      log("system", `${msg.requester_name || "相手"}から手番交互の開始申請が届きました。`);
+      break;
+    case "start_game_request_resolved":
+      syncServerClock(msg.server_now);
+      if (!state.startGameRequest || state.startGameRequest.request_id === msg.request_id) {
+        clearStartGameRequest();
+      }
+      log(msg.status === "accepted" ? "system" : "error", msg.message || "開始申請を終了しました。");
+      break;
     case "game_start":
+      clearStartGameRequest();
       state.appMode = "playing";
       state.roomState = "playing";
       state.firstPlayerId = null;
@@ -960,7 +1122,6 @@ function handleMessage(msg) {
       if (msg.action === "field_flow") {
         showFlowPreview(msg.played_cards || [], msg.number);
       }
-      if (msg.mode === "composite") requestCompositePracticeStats();
       break;
     case "penalty":
       break;
@@ -984,10 +1145,10 @@ function handleMessage(msg) {
       break;
     case "chat":
       if (msg.scope === "tournament_match") {
-        logTournamentMatch(msg.sender || "system", msg.message || "");
+        logTournamentMatch(msg.sender || "system", msg.message || "", msg.action);
         if (state.tournamentWorkspaceMode !== "match") state.tournamentMatchUnreadCount += 1;
       } else {
-        log(msg.sender || "chat", msg.message || "");
+        log(msg.sender || "chat", msg.message || "", el.roomLogBox, msg.action);
         if (msg.scope === "tournament_lobby" && state.tournamentWorkspaceMode !== "lobby") {
           state.tournamentLobbyUnreadCount += 1;
         }
@@ -1009,13 +1170,17 @@ function handleMessage(msg) {
       if (state.chatMode !== "global") state.globalUnreadCount += 1;
       break;
     case "error":
-      if (msg.code === "practice_authorization_required") {
-        state.practiceStatsLoading = false;
-        state.practiceStatsError = msg.message || "合成数履歴を取得できませんでした。";
-        renderPracticeStats();
-      }
+      const failedRegistrationRequest = state.pendingRegistrationRequest;
+      state.pendingRegistrationRequest = null;
       if (msg.code === "registered_number_limit") {
         el.registerStatus.textContent = msg.message || "登録数が上限を超えています";
+      }
+      if (String(msg.code || "").startsWith("start_game_")) {
+        state.startGameRequestActionPending = false;
+      }
+      if (failedRegistrationRequest?.kind === "restore") {
+        log("error", "保存したカスタマイズを復元できなかったため、部屋の既定表を読み込みます。");
+        loadSample();
       }
       if (state.chatMode === "global") {
         state.globalChatJoining = false;
@@ -1213,12 +1378,12 @@ function startFlow(flow) {
 function continuePendingFlowAfterJoin() {
   if (!state.pendingFlow) return;
   if (state.pendingFlow === "enter") {
-    if (CONFIG.features.registration) loadSample();
+    if (CONFIG.features.registration) loadRegisteredNumbersForCurrentRoom();
     state.pendingFlow = null;
     return;
   }
   if (state.pendingFlow !== "watch") {
-    loadSample();
+    loadRegisteredNumbersForCurrentRoom();
     if (!state.isWaiting) {
       state.isWaiting = true;
       send({ type: "change_status", status: "waiting" });
@@ -1258,10 +1423,10 @@ function showCampaignResult(msg) {
   if (!CONFIG.features.campaign) return;
   const recorded = msg.status === "recorded";
   el.campaignResultTitle.textContent = recorded
-    ? "ゴールドCPUへの勝利を記録しました！"
+    ? "今週の勝利を記録しました！"
     : "勝利記録を保存できませんでした";
   el.campaignResultMessage.textContent = recorded
-    ? `「${msg.player_name}」で個人通算${msg.player_wins}勝、みんなで${msg.total_wins}/${msg.goal}勝です。`
+    ? `「${msg.player_name}」で今週${msg.player_wins}勝、みんなで${msg.total_wins}/${msg.goal}勝です。`
     : msg.message || "時間をおいて、キャンペーンページをご確認ください。";
 
   const campaignUrl = msg.campaign_url || "./campaign.html";
@@ -1269,7 +1434,7 @@ function showCampaignResult(msg) {
   el.campaignShareBtn.classList.toggle("hidden", !recorded);
 
   if (recorded) {
-    const shareText = `「${msg.player_name}」でゴールドCPUに勝利！ 個人通算${msg.player_wins}勝、みんなで${msg.total_wins}/${msg.goal}勝。 #素数大富豪NEO`;
+    const shareText = `「${msg.player_name}」でゴールドCPUに勝利！ 今週${msg.player_wins}勝、みんなで${msg.total_wins}/${msg.goal}勝。 #素数大富豪NEO`;
     const params = new URLSearchParams({
       text: shareText,
       url: CONFIG.shareUrl,
@@ -1447,6 +1612,9 @@ function leaveRoom() {
   state.appMode = "setup";
   state.isWaiting = false;
   state.pendingFlow = null;
+  clearStartGameRequest();
+  state.turnAlternationEnabled = false;
+  state.turnAlternationFirst = "random";
   state.cpuChooserOpen = false;
   state.selectedCpuKey = "";
   state.players = [];
@@ -1522,25 +1690,182 @@ function confirmCpuSelection() {
 }
 
 function startGame() {
-  send({ type: "start_game" });
+  const participantCount = state.players.filter((player) => player.status === "waiting").length;
+  const alternate = Boolean(
+    CONFIG.features.turnAlternation
+    && state.turnAlternationEnabled
+    && participantCount === 2
+  );
+  send({
+    type: "start_game",
+    ...(CONFIG.features.turnAlternation ? {
+      turn_order: {
+        alternate,
+        first: state.turnAlternationFirst,
+      },
+    } : {}),
+  });
+}
+
+function clearStartGameRequest() {
+  state.startGameRequest = null;
+  state.startGameRequestActionPending = false;
+  if (el.startGameApprovalDialog?.open) el.startGameApprovalDialog.close();
+}
+
+function startGameRequestSeconds() {
+  const expiresAtMs = parseClockTime(state.startGameRequest?.expires_at);
+  if (expiresAtMs === null) return 0;
+  return Math.max(0, Math.ceil((expiresAtMs - (Date.now() + state.serverOffsetMs)) / 1000));
+}
+
+function startGameRequestTurnText(request) {
+  if (request?.continuation && request.effective_first_player_name) {
+    return `前局と交互になるため、次局は${request.effective_first_player_name}が先手です。`;
+  }
+  if (request?.first === "random") {
+    return "初回の先手は、承認後にランダムで決まります。";
+  }
+  if (request?.effective_first_player_name) {
+    return `初回は${request.effective_first_player_name}が先手です。`;
+  }
+  return "初回の先手を確認できませんでした。";
+}
+
+function renderTurnOrderSettings() {
+  if (!el.turnOrderSettings || !CONFIG.features.turnAlternation) return;
+  const tournamentRoom = isTournamentRoom();
+  const participants = state.players.filter((player) => player.status === "waiting");
+  const twoPlayerGame = participants.length === 2;
+  const pending = Boolean(state.startGameRequest);
+  const controlsEnabled = (
+    state.roomJoined
+    && state.roomState !== "playing"
+    && state.isWaiting
+    && twoPlayerGame
+    && !pending
+    && !tournamentRoom
+  );
+  el.turnOrderSettings.classList.toggle("hidden", tournamentRoom);
+  el.turnAlternationToggle.checked = state.turnAlternationEnabled;
+  el.turnAlternationToggle.disabled = !controlsEnabled;
+  el.turnAlternationFirstSelect.value = state.turnAlternationFirst;
+  el.turnAlternationFirstSelect.disabled = !controlsEnabled || !state.turnAlternationEnabled;
+
+  if (!twoPlayerGame) {
+    el.turnAlternationNote.textContent = "2人対戦で使えます。1人プレイではこの設定を使用しません。";
+  } else if (participants.some((player) => player.is_cpu)) {
+    el.turnAlternationNote.textContent = "CPU戦では承認なしで開始し、同じ相手なら先手を交代します。";
+  } else {
+    el.turnAlternationNote.textContent = "対人戦では、開始するたびに相手の承認が必要です。";
+  }
+  renderStartGameRequest();
+}
+
+function renderStartGameRequest() {
+  if (!el.startRequestPanel || !CONFIG.features.turnAlternation) return;
+  const request = state.startGameRequest;
+  const seconds = request ? startGameRequestSeconds() : 0;
+  el.startRequestPanel.classList.toggle("hidden", !request);
+  if (!request) {
+    if (el.startGameApprovalDialog?.open) el.startGameApprovalDialog.close();
+    return;
+  }
+
+  const waitingText = request.role === "requester"
+    ? `${request.opponent_name}の承認待ち（残り${seconds}秒）`
+    : `${request.requester_name}から開始申請が届いています（残り${seconds}秒）`;
+  el.startRequestText.textContent = waitingText;
+  el.cancelStartRequestBtn.classList.toggle("hidden", request.role !== "requester");
+  el.cancelStartRequestBtn.disabled = state.startGameRequestActionPending || seconds <= 0;
+
+  if (request.role !== "opponent") {
+    if (el.startGameApprovalDialog?.open) el.startGameApprovalDialog.close();
+    return;
+  }
+  el.startGameApprovalText.textContent = `${request.requester_name}から「手番交互」での対戦開始申請が届きました。${startGameRequestTurnText(request)}`;
+  el.startGameApprovalCountdown.textContent = `承認期限まで残り${seconds}秒`;
+  el.approveStartGameBtn.disabled = state.startGameRequestActionPending || seconds <= 0;
+  el.rejectStartGameBtn.disabled = state.startGameRequestActionPending || seconds <= 0;
+  if (!el.startGameApprovalDialog.open && typeof el.startGameApprovalDialog.showModal === "function") {
+    el.startGameApprovalDialog.showModal();
+  }
+}
+
+function cancelStartGameRequest() {
+  const request = state.startGameRequest;
+  if (!request || request.role !== "requester" || state.startGameRequestActionPending) return;
+  state.startGameRequestActionPending = true;
+  send({ type: "cancel_start_game_request", request_id: request.request_id });
+  renderStartGameRequest();
+}
+
+function respondToStartGameRequest(approved) {
+  const request = state.startGameRequest;
+  if (!request || request.role !== "opponent" || state.startGameRequestActionPending) return;
+  state.startGameRequestActionPending = true;
+  send({
+    type: "respond_start_game_request",
+    request_id: request.request_id,
+    approved: approved === true,
+  });
+  renderStartGameRequest();
+}
+
+function loadRegisteredNumbersForCurrentRoom() {
+  const groupKey = registeredCustomizationGroupKey();
+  const customization = currentRegisteredCustomization(groupKey);
+  if (!el.saveCustomizationToggle || !hasSavedRegisteredCustomization(groupKey)) {
+    loadSample();
+    return;
+  }
+  el.primeText.value = customization.prime_text;
+  el.compositeText.value = customization.composite_text;
+  state.pendingRegistrationRequest = {
+    kind: "restore",
+    groupKey,
+    primeText: customization.prime_text,
+    compositeText: customization.composite_text,
+  };
+  send({
+    type: "set_registered_numbers",
+    prime_text: customization.prime_text,
+    composite_text: customization.composite_text,
+  });
+  el.registerStatus.textContent = "保存したカスタマイズを読み込み中...";
 }
 
 function loadSample() {
   const selected = el.sampleSelect.value || currentRoomOption().defaultSampleKey || CONFIG.defaultSampleKey;
+  state.pendingRegistrationRequest = {
+    kind: "sample",
+    groupKey: registeredCustomizationGroupKey(),
+    sampleKey: selected,
+  };
   send({ type: "load_sample_registered_primes", sample_key: selected });
   el.registerStatus.textContent = "サンプル読み込み中...";
 }
 
 function saveRegisteredNumbers() {
+  const primeText = el.primeText.value;
+  const compositeText = el.compositeText.value;
+  state.pendingRegistrationRequest = {
+    kind: "manual",
+    groupKey: registeredCustomizationGroupKey(),
+    primeText,
+    compositeText,
+  };
   send({
     type: "set_registered_numbers",
-    prime_text: el.primeText.value,
-    composite_text: el.compositeText.value,
+    prime_text: primeText,
+    composite_text: compositeText,
   });
   el.registerStatus.textContent = "登録中...";
 }
 
 function renderRegisteredStatus(msg) {
+  const request = state.pendingRegistrationRequest;
+  state.pendingRegistrationRequest = null;
   if (msg.sample_key) el.sampleSelect.value = msg.sample_key;
   if (msg.sample_prime_text) el.primeText.value = msg.sample_prime_text;
   if (msg.sample_composite_text) el.compositeText.value = msg.sample_composite_text;
@@ -1553,9 +1878,24 @@ function renderRegisteredStatus(msg) {
   const primeCount = msg.prime_count ?? msg.count ?? 0;
   const compositeCount = msg.composite_count ?? 0;
   const errorCount = (msg.prime_errors || msg.errors || []).length + (msg.composite_errors || []).length;
-  el.registerStatus.textContent = errorCount
+  const groupKey = request?.groupKey || registeredCustomizationGroupKey();
+  const primeText = typeof msg.sample_prime_text === "string"
+    ? msg.sample_prime_text
+    : request?.primeText ?? el.primeText.value;
+  const compositeText = typeof msg.sample_composite_text === "string"
+    ? msg.sample_composite_text
+    : request?.compositeText ?? el.compositeText.value;
+  const customizationSaved = rememberAcceptedRegistration(groupKey, primeText, compositeText);
+  const saveStatus = customizationSaved === true
+    ? " / カスタマイズ保存済み"
+    : customizationSaved === false
+      ? " / ブラウザ保存失敗"
+      : "";
+  const countStatus = errorCount
     ? `素数 ${primeCount} / 合成数 ${compositeCount} / エラー ${errorCount}`
     : `素数 ${primeCount} / 合成数 ${compositeCount}`;
+  el.registerStatus.textContent = `${countStatus}${saveStatus}`;
+  renderRegisteredCustomization();
   renderSelection();
   scheduleAssist();
 }
@@ -1861,8 +2201,8 @@ function renderAll() {
   updateIdentityModeUi();
   renderSoundToggle();
   renderRoomChoice();
+  renderRegisteredCustomization();
   renderRecruitments();
-  renderPracticeStats();
   renderChat();
   el.playStatus.textContent = state.isWaiting
     ? state.roomState === "playing"
@@ -1870,22 +2210,24 @@ function renderAll() {
       : "対戦待ち"
     : "観戦中";
   const tournamentRoom = isTournamentRoom();
+  const startRequestPending = Boolean(state.startGameRequest);
   el.readyBtn.textContent = state.isWaiting ? "待機をやめる" : "対戦に参加";
   el.readyBtn.classList.toggle("hidden", tournamentRoom);
   el.addCpuBtn.classList.toggle("hidden", tournamentRoom);
   el.startBtn.classList.toggle("hidden", tournamentRoom);
-  el.readyBtn.disabled = tournamentRoom || state.roomState === "playing";
+  el.readyBtn.disabled = tournamentRoom || state.roomState === "playing" || startRequestPending;
   el.addCpuBtn.textContent = state.currentRoomHasCpu ? "CPU退出" : "CPU追加";
   el.addCpuBtn.setAttribute("aria-expanded", String(state.cpuChooserOpen && !state.currentRoomHasCpu));
-  el.addCpuBtn.disabled = state.roomState === "playing" || (
+  el.addCpuBtn.disabled = startRequestPending || state.roomState === "playing" || (
     !state.currentRoomHasCpu
     && !(state.roomCpuProfiles[currentRoomId()] || []).length
   );
-  el.startBtn.disabled = tournamentRoom || state.roomState === "playing" || !state.isWaiting;
+  el.startBtn.disabled = tournamentRoom || startRequestPending || state.roomState === "playing" || !state.isWaiting;
   if (el.reconnectPolicyNote) {
     el.reconnectPolicyNote.textContent = `通信切断時は対戦中${formatDuration(state.playingDisconnectGraceSeconds)}、待機中${formatDuration(state.waitingDisconnectGraceSeconds)}まで同じブラウザから復帰できます。「退室」は復帰待ちになりません。`;
   }
   renderCpuChooser();
+  renderTurnOrderSettings();
   el.playBtn.disabled = !isMyTurn() || !state.selectedCards.length || (state.compositeMode && !state.compositeTokens.length);
   el.playBtn.textContent = isHnpChallengeSelection() ? "HNPチャレンジ" : "出す";
   el.compositeModeBtn.disabled = !state.allowComposite || state.roomState !== "playing" || !state.hand.length;
@@ -1915,80 +2257,6 @@ function renderAll() {
   renderAssist();
   renderTournament();
   renderTournamentWorkspace();
-}
-
-function renderPracticeStats() {
-  if (!el.practiceStatsPanel || !el.practiceStatsBody) return;
-  const stats = state.practiceStats;
-  const totals = stats?.totals || {};
-  const items = Array.isArray(stats?.items) ? stats.items : [];
-
-  el.practiceStatsOwnerTotal.textContent = formatPracticeStatsCount(totals.owner_count);
-  el.practiceStatsCpuTotal.textContent = formatPracticeStatsCount(totals.cpu_count);
-  el.practiceStatsTotal.textContent = formatPracticeStatsCount(totals.total_count);
-  el.practiceStatsDistinctTotal.textContent = formatPracticeStatsCount(totals.distinct_count);
-  el.practiceStatsRefreshBtn.disabled = state.practiceStatsLoading || !state.connected || !state.practiceAuthorized;
-
-  if (state.practiceStatsError) {
-    el.practiceStatsStatus.textContent = state.practiceStatsError;
-    el.practiceStatsStatus.classList.add("error");
-  } else {
-    el.practiceStatsStatus.classList.remove("error");
-    if (state.practiceStatsLoading) {
-      el.practiceStatsStatus.textContent = "履歴を更新しています…";
-    } else if (!stats) {
-      el.practiceStatsStatus.textContent = "認証後に履歴を読み込みます。";
-    } else if (stats.persistent) {
-      el.practiceStatsStatus.textContent = "Railwayのデータベースに保存されています。";
-    } else {
-      el.practiceStatsStatus.textContent = "現在は一時保存です。サーバー再起動時に履歴が消える可能性があります。";
-    }
-  }
-
-  el.practiceStatsBody.replaceChildren();
-  if (!items.length) {
-    const row = document.createElement("tr");
-    const cell = document.createElement("td");
-    cell.colSpan = 5;
-    cell.className = "practice-stats-empty";
-    cell.textContent = stats ? "まだ成功した合成数出しはありません。" : "履歴を読み込んでいます…";
-    row.appendChild(cell);
-    el.practiceStatsBody.appendChild(row);
-    return;
-  }
-
-  items.forEach((item) => {
-    const row = document.createElement("tr");
-    const number = document.createElement("th");
-    number.scope = "row";
-    number.textContent = String(item.number ?? "-");
-    row.appendChild(number);
-    ["owner_count", "cpu_count", "total_count"].forEach((key) => {
-      const cell = document.createElement("td");
-      cell.textContent = formatPracticeStatsCount(item[key]);
-      row.appendChild(cell);
-    });
-    const lastPlayed = document.createElement("td");
-    lastPlayed.textContent = formatPracticeStatsDate(item.last_played_at);
-    row.appendChild(lastPlayed);
-    el.practiceStatsBody.appendChild(row);
-  });
-}
-
-function formatPracticeStatsCount(value) {
-  const count = Number(value);
-  return Number.isFinite(count) && count >= 0 ? Math.trunc(count).toLocaleString("ja-JP") : "0";
-}
-
-function formatPracticeStatsDate(value) {
-  const date = new Date(value);
-  if (!value || Number.isNaN(date.getTime())) return "-";
-  return new Intl.DateTimeFormat("ja-JP", {
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
 }
 
 function renderRecruitments() {
@@ -2523,7 +2791,7 @@ function renderCpuChooser() {
   const campaignPrefix = CONFIG.features.campaign
     && state.selectedRoomGroupKey === CONFIG.roomGroupOrder[0]
     && selected?.key === "gold_planner"
-    ? "【イベント開催中】 "
+    ? "【週次チャレンジ対象】 "
     : "";
   el.cpuProfileDescription.textContent = `${campaignPrefix}${description}`;
   el.confirmCpuBtn.textContent = `${selected?.label || "CPU"}を追加`;
@@ -3369,18 +3637,41 @@ function setConnection(kind, label, detail) {
   el.serverLabel.textContent = detail;
 }
 
-function log(sender, message, target = el.roomLogBox) {
+function largestPrimeShareHref(action) {
+  if (!CONFIG.features.largestPrimeShare || action?.kind !== "share_largest_prime") return "";
+  const primeValue = String(action.prime_value || "");
+  if (!/^\d+$/.test(primeValue)) return "";
+  const shareHashtag = String(CONFIG.shareHashtag || "").trim();
+  const shareText = `${CONFIG.productName}で ${primeValue} を出しました！${shareHashtag ? ` #${shareHashtag}` : ""}`;
+  const params = new URLSearchParams({
+    text: shareText,
+    url: CONFIG.shareUrl,
+  });
+  return `https://twitter.com/intent/tweet?${params.toString()}`;
+}
+
+function log(sender, message, target = el.roomLogBox, action = null) {
   if (!target) return;
   const line = document.createElement("div");
   line.className = "log-line";
   const strong = document.createElement("strong");
   strong.textContent = sender;
   line.append(strong, document.createTextNode(`: ${message}`));
+  const shareHref = largestPrimeShareHref(action);
+  if (shareHref) {
+    const link = document.createElement("a");
+    link.className = "chat-action-link";
+    link.href = shareHref;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = "Xで共有";
+    line.append(document.createTextNode(" "), link);
+  }
   target.prepend(line);
 }
 
-function logTournamentMatch(sender, message) {
-  log(sender, message, el.tournamentMatchLogBox || el.roomLogBox);
+function logTournamentMatch(sender, message, action = null) {
+  log(sender, message, el.tournamentMatchLogBox || el.roomLogBox, action);
 }
 
 function logGlobalSystem(message) {

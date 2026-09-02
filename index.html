@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>素数大富豪＋</title>
-    <link rel="stylesheet" href="./client-common/styles.css?v=shared-fddc746f3741" />
+    <link rel="stylesheet" href="./client-common/styles.css?v=shared-ecd59938eb09" />
     <link rel="stylesheet" href="./theme.css?v=plus-20260805-2" />
   </head>
   <body>
@@ -197,6 +197,31 @@
               <button id="addCpuBtn" class="ghost-button" type="button">CPU追加</button>
               <button id="startBtn" class="primary-button" type="button">開始</button>
             </div>
+            <details id="turnOrderSettings" class="turn-order-settings" data-feature="turnAlternation">
+              <summary>対戦設定</summary>
+              <div class="turn-order-setting-row">
+                <label class="turn-alternation-option" for="turnAlternationToggle">
+                  <input id="turnAlternationToggle" type="checkbox" />
+                  <span>
+                    <strong>手番交互</strong>
+                    <small>同じ2人なら、先手を1局ごとに交代します。</small>
+                  </span>
+                </label>
+                <label class="turn-order-first-choice" for="turnAlternationFirstSelect">
+                  <span>初回</span>
+                  <select id="turnAlternationFirstSelect" class="full-select" disabled>
+                    <option value="random">ランダム</option>
+                    <option value="requester">自分が先手</option>
+                    <option value="opponent">相手が先手</option>
+                  </select>
+                </label>
+              </div>
+              <p id="turnAlternationNote" class="microcopy">2人対戦で使えます。対人戦では相手の承認が必要です。</p>
+              <div id="startRequestPanel" class="start-request-panel hidden" role="status">
+                <span id="startRequestText"></span>
+                <button id="cancelStartRequestBtn" class="ghost-button compact" type="button">取り消す</button>
+              </div>
+            </details>
             <p id="reconnectPolicyNote" class="microcopy">切断復帰猶予を読み込み中です。</p>
             <div id="cpuChooser" class="cpu-chooser hidden">
               <div class="cpu-chooser-heading">
@@ -426,6 +451,19 @@
       </footer>
     </main>
 
+    <dialog id="startGameApprovalDialog" class="start-game-approval-dialog" data-feature="turnAlternation">
+      <div class="start-game-approval-card">
+        <p class="eyebrow">対戦開始の確認</p>
+        <h2>手番交互で開始しますか？</h2>
+        <p id="startGameApprovalText" class="start-game-approval-text"></p>
+        <p id="startGameApprovalCountdown" class="microcopy"></p>
+        <div class="button-row start-game-approval-actions">
+          <button id="rejectStartGameBtn" class="ghost-button" type="button">拒否</button>
+          <button id="approveStartGameBtn" class="primary-button" type="button">承認して開始</button>
+        </div>
+      </div>
+    </dialog>
+
     <dialog id="campaignResultDialog" class="campaign-result-dialog" data-feature="campaign">
       <div class="campaign-result-card">
         <button id="campaignDialogCloseBtn" class="dialog-close-button" type="button" aria-label="閉じる">×</button>
@@ -444,6 +482,6 @@
     </dialog>
 
     <script src="./product-config.js?v=plus-20260806-1"></script>
-    <script src="./client-common/app.js?v=shared-fddc746f3741"></script>
+    <script src="./client-common/app.js?v=shared-ecd59938eb09"></script>
   </body>
 </html>

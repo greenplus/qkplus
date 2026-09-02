@@ -124,5 +124,6 @@ window.PRIMEQK_CLIENT_CONFIG = {
     globalChat: true,
     tournament: true,
     recruitment: true,
+    turnAlternation: true,
   },
 };
