@@ -138,6 +138,7 @@ const state = {
   startRequestedForFlow: false,
   turnAlternationEnabled: false,
   turnAlternationFirst: "random",
+  turnAlternationSeries: null,
   startGameRequest: null,
   startGameRequestActionPending: false,
   assistTimer: null,
@@ -372,6 +373,9 @@ function bindElements() {
     "turnAlternationToggle",
     "turnAlternationFirstSelect",
     "turnAlternationNote",
+    "turnAlternationSeriesPanel",
+    "turnAlternationSeriesText",
+    "endTurnAlternationSeriesBtn",
     "startRequestPanel",
     "startRequestText",
     "cancelStartRequestBtn",
@@ -525,6 +529,9 @@ function bindEvents() {
     el.turnAlternationFirstSelect.addEventListener("change", () => {
       state.turnAlternationFirst = el.turnAlternationFirstSelect.value;
     });
+  }
+  if (el.endTurnAlternationSeriesBtn) {
+    el.endTurnAlternationSeriesBtn.addEventListener("click", endTurnAlternationSeries);
   }
   if (el.cancelStartRequestBtn) {
     el.cancelStartRequestBtn.addEventListener("click", cancelStartGameRequest);
@@ -890,6 +897,7 @@ function handleMessage(msg) {
     case "room_state_initialization":
       state.roomJoined = true;
       state.roomState = msg.room_state || "waiting";
+      state.turnAlternationSeries = msg.turn_alternation_series || null;
       state.appMode = msg.room_state === "playing" ? "playing" : "room";
       state.playingDisconnectGraceSeconds = msg.playing_disconnect_grace_seconds ?? state.playingDisconnectGraceSeconds;
       state.waitingDisconnectGraceSeconds = msg.waiting_disconnect_grace_seconds ?? state.waitingDisconnectGraceSeconds;
@@ -924,6 +932,7 @@ function handleMessage(msg) {
     case "room_left":
       if (msg.room_id) removeRoomResumeToken(msg.room_id);
       clearStartGameRequest();
+      state.turnAlternationSeries = null;
       clearTurnClock();
       break;
     case "update_room_status":
@@ -933,6 +942,7 @@ function handleMessage(msg) {
         state.currentRoomHasCpu = nextPlayers.some((player) => player.is_cpu);
         if (state.currentRoomHasCpu) state.cpuChooserOpen = false;
         state.roomCpuProfiles[currentRoomId()] = msg.cpu_profiles || state.roomCpuProfiles[currentRoomId()] || [];
+        state.turnAlternationSeries = msg.turn_alternation_series || null;
         if (isTournamentRoom() && msg.tournament) setTournamentState(msg.tournament);
         if (typeof msg.hnp_challenge_enabled === "boolean") state.hnpChallengeEnabled = msg.hnp_challenge_enabled;
         detectPlayerJoined(nextPlayers);
@@ -976,6 +986,7 @@ function handleMessage(msg) {
       clearStartGameRequest();
       state.turnAlternationEnabled = false;
       state.turnAlternationFirst = "random";
+      state.turnAlternationSeries = null;
       state.roomJoined = false;
       state.appMode = "setup";
       state.roomState = "waiting";
@@ -1142,6 +1153,10 @@ function handleMessage(msg) {
         msg.lines || [],
         msg.scope === "tournament_match" ? el.tournamentMatchLogBox : el.roomLogBox,
       );
+      break;
+    case "turn_alternation_series_record":
+      state.turnAlternationSeries = null;
+      logTurnAlternationSeriesRecord(msg);
       break;
     case "chat":
       if (msg.scope === "tournament_match") {
@@ -1615,6 +1630,7 @@ function leaveRoom() {
   clearStartGameRequest();
   state.turnAlternationEnabled = false;
   state.turnAlternationFirst = "random";
+  state.turnAlternationSeries = null;
   state.cpuChooserOpen = false;
   state.selectedCpuKey = "";
   state.players = [];
@@ -1707,6 +1723,18 @@ function startGame() {
   });
 }
 
+function endTurnAlternationSeries() {
+  const series = state.turnAlternationSeries;
+  if (
+    !series
+    || state.roomState === "playing"
+    || state.startGameRequest
+    || !series.participant_ids?.includes(state.playerId)
+  ) return;
+  send({ type: "end_turn_alternation_series" });
+  if (el.endTurnAlternationSeriesBtn) el.endTurnAlternationSeriesBtn.disabled = true;
+}
+
 function clearStartGameRequest() {
   state.startGameRequest = null;
   state.startGameRequestActionPending = false;
@@ -1751,6 +1779,27 @@ function renderTurnOrderSettings() {
   el.turnAlternationToggle.disabled = !controlsEnabled;
   el.turnAlternationFirstSelect.value = state.turnAlternationFirst;
   el.turnAlternationFirstSelect.disabled = !controlsEnabled || !state.turnAlternationEnabled;
+
+  const series = state.turnAlternationSeries;
+  const canEndSeries = Boolean(
+    series
+    && series.game_count > 0
+    && series.participant_ids?.includes(state.playerId)
+    && state.roomState !== "playing"
+    && !pending
+  );
+  if (el.turnAlternationSeriesPanel) {
+    el.turnAlternationSeriesPanel.classList.toggle("hidden", !canEndSeries);
+  }
+  if (el.turnAlternationSeriesText && canEndSeries) {
+    const result = (series.participants || [])
+      .map((participant) => `${participant.name} ${participant.wins}勝${participant.losses}敗`)
+      .join(" / ");
+    el.turnAlternationSeriesText.textContent = `交互対戦 ${series.game_count}局：${result}`;
+  }
+  if (el.endTurnAlternationSeriesBtn) {
+    el.endTurnAlternationSeriesBtn.disabled = !canEndSeries;
+  }
 
   if (!twoPlayerGame) {
     el.turnAlternationNote.textContent = "2人対戦で使えます。1人プレイではこの設定を使用しません。";
@@ -3727,6 +3776,72 @@ function logScoreRecord(lines, target = el.roomLogBox) {
   pre.textContent = lines.join("\n");
   entry.appendChild(pre);
 
+  target.prepend(entry);
+}
+
+async function copyKifuText(text, status) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.className = "clipboard-fallback";
+      document.body.appendChild(textarea);
+      textarea.select();
+      const copied = document.execCommand("copy");
+      textarea.remove();
+      if (!copied) throw new Error("copy failed");
+    }
+    status.textContent = "コピーしました";
+  } catch {
+    status.textContent = "コピーできませんでした。本文を選択してコピーしてください。";
+  }
+}
+
+function downloadKifuText(text, filename) {
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = String(filename || "turn-alternation-kifu.txt")
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-");
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function logTurnAlternationSeriesRecord(message, target = el.roomLogBox) {
+  const text = String(message.text || "");
+  if (!target || !text) return;
+  const entry = document.createElement("details");
+  entry.className = "log-line score-record turn-alternation-series-record";
+  entry.open = true;
+
+  const summary = document.createElement("summary");
+  summary.textContent = `手番交互・全${message.game_count || 0}局の数譜`;
+  const actions = document.createElement("div");
+  actions.className = "score-record-actions";
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.className = "ghost-button compact";
+  copyButton.textContent = "まとめてコピー";
+  const downloadButton = document.createElement("button");
+  downloadButton.type = "button";
+  downloadButton.className = "ghost-button compact";
+  downloadButton.textContent = "テキスト保存";
+  const status = document.createElement("span");
+  status.className = "score-record-action-status";
+  status.setAttribute("role", "status");
+  copyButton.addEventListener("click", () => copyKifuText(text, status));
+  downloadButton.addEventListener("click", () => downloadKifuText(text, message.filename));
+  actions.append(copyButton, downloadButton, status);
+
+  const pre = document.createElement("pre");
+  pre.textContent = text;
+  entry.append(summary, actions, pre);
   target.prepend(entry);
 }
 
