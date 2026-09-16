@@ -39,6 +39,7 @@ const RECRUITMENT_OWNER_KEY = "prime-daifugo-" + CONFIG.productKey + "-recruitme
 const RECRUITMENT_GUEST_OWNER_KEY = RECRUITMENT_OWNER_KEY + "-guest";
 const PRACTICE_ACCESS_TOKEN_KEY = "prime-daifugo-" + CONFIG.productKey + "-practice-access-token";
 const REGISTERED_CUSTOMIZATION_KEY = "prime-daifugo-" + CONFIG.productKey + "-registered-customizations-v1";
+const CONNECTION_DIAGNOSTICS_KEY = "prime-daifugo-" + CONFIG.productKey + "-connection-diagnostics-v1";
 const PLAYER_JOINED_SOUND_URL = CONFIG.playerJoinedSoundUrl || "./assets/sounds/player-joined.mp3";
 let playerJoinedAudio = null;
 let soundUnlockPromise = null;
@@ -66,6 +67,8 @@ const state = {
   roomCountsLoaded: false,
   roomCountsTimer: null,
   reconnectTimer: null,
+  reconnectSuppressed: false,
+  connectionDiagnostics: readConnectionDiagnostics(),
   turnClockTimer: null,
   serverOffsetMs: 0,
   turnSeq: null,
@@ -156,6 +159,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setRandomNameIfEmpty();
   initializeRecruitmentForm();
   initializePracticeAuth();
+  initializeConnectionLifecycle();
   connect();
   state.turnClockTimer = window.setInterval(() => {
     renderTurnClock();
@@ -778,12 +782,71 @@ function isRoomSelectable(roomKey) {
   return isRoomAvailable(roomKey) && !isRoomFull(roomKey);
 }
 
-function connect() {
-  if (state.ws && [WebSocket.OPEN, WebSocket.CONNECTING].includes(state.ws.readyState)) return;
-  setConnection("connecting", "接続中", CONFIG.wsUrl);
-  state.ws = new WebSocket(CONFIG.wsUrl);
+function readConnectionDiagnostics() {
+  try {
+    const records = JSON.parse(sessionStorage.getItem(CONNECTION_DIAGNOSTICS_KEY) || "[]");
+    return Array.isArray(records) ? records.slice(-40) : [];
+  } catch {
+    return [];
+  }
+}
 
-  state.ws.addEventListener("open", () => {
+function recordConnectionDiagnostic(event, details = {}) {
+  const record = {
+    at: new Date().toISOString(),
+    event,
+    visibility: document.visibilityState || "unknown",
+    online: typeof navigator === "undefined" ? null : navigator.onLine,
+    ...details,
+  };
+  state.connectionDiagnostics.push(record);
+  state.connectionDiagnostics = state.connectionDiagnostics.slice(-40);
+  try {
+    sessionStorage.setItem(CONNECTION_DIAGNOSTICS_KEY, JSON.stringify(state.connectionDiagnostics));
+  } catch {}
+  // Local diagnostics only: no names, room tokens, hand data or server uploads.
+  console.info("[PrimeQK connection]", record);
+}
+
+window.getPrimeQkConnectionDiagnostics = () => JSON.parse(JSON.stringify(state.connectionDiagnostics));
+
+function resumeConnectionIfClosed() {
+  if (state.reconnectSuppressed) return;
+  if (state.ws && state.ws.readyState !== WebSocket.CLOSED) return;
+  clearTimeout(state.reconnectTimer);
+  state.reconnectTimer = null;
+  connect();
+}
+
+function initializeConnectionLifecycle() {
+  window.addEventListener("online", () => {
+    recordConnectionDiagnostic("online");
+    resumeConnectionIfClosed();
+  });
+  window.addEventListener("offline", () => recordConnectionDiagnostic("offline"));
+  document.addEventListener("visibilitychange", () => {
+    recordConnectionDiagnostic("visibility");
+    if (document.visibilityState === "visible") resumeConnectionIfClosed();
+  });
+}
+
+function connect() {
+  if (state.reconnectSuppressed) return;
+  if (state.ws && [WebSocket.OPEN, WebSocket.CONNECTING].includes(state.ws.readyState)) return;
+  clearTimeout(state.reconnectTimer);
+  state.reconnectTimer = null;
+  setConnection("connecting", "接続中", CONFIG.wsUrl);
+  const socket = new WebSocket(CONFIG.wsUrl);
+  state.ws = socket;
+  const startedAt = Date.now();
+  let openedAt = null;
+  let lastMessageAt = null;
+  recordConnectionDiagnostic("connecting");
+
+  socket.addEventListener("open", () => {
+    if (state.ws !== socket) return;
+    openedAt = Date.now();
+    recordConnectionDiagnostic("open", { connectMs: openedAt - startedAt });
     state.connected = true;
     setConnection("online", "接続済み", `${CONFIG.lobbyName} / ${Object.keys(CONFIG.rooms).length}部屋`);
     if (CONFIG.features.practiceAuth) {
@@ -803,12 +866,22 @@ function connect() {
     renderAll();
   });
 
-  state.ws.addEventListener("message", (event) => {
+  socket.addEventListener("message", (event) => {
+    if (state.ws !== socket) return;
+    lastMessageAt = Date.now();
     const message = JSON.parse(event.data);
     handleMessage(message);
   });
 
-  state.ws.addEventListener("close", () => {
+  socket.addEventListener("close", (event) => {
+    if (state.ws !== socket) return;
+    recordConnectionDiagnostic("close", {
+      code: event.code,
+      reason: String(event.reason || "").slice(0, 160),
+      wasClean: event.wasClean,
+      connectedMs: openedAt === null ? null : Date.now() - openedAt,
+      lastMessageAgoMs: lastMessageAt === null ? null : Date.now() - lastMessageAt,
+    });
     state.connected = false;
     clearStartGameRequest();
     state.recruitmentSubmitPending = false;
@@ -820,14 +893,26 @@ function connect() {
     }
     clearInterval(state.roomCountsTimer);
     state.roomCountsTimer = null;
-    setConnection("error", "切断されました", "2秒後に自動再接続します");
-    log("system", `サーバーとの接続が切れました。対戦中は${state.playingDisconnectGraceSeconds}秒、待機中は${state.waitingDisconnectGraceSeconds}秒まで自動復帰を試みます。`);
     clearTimeout(state.reconnectTimer);
+    state.reconnectTimer = null;
+    if (event.code === 4001) {
+      // The server explicitly moved this seat to another connection. Retrying
+      // with the same token would repeatedly disconnect that new connection.
+      state.reconnectSuppressed = true;
+      setConnection("error", "別の接続へ移動しました", "このタブで再開する場合はページを再読み込みしてください");
+      log("system", "席が別の接続へ引き継がれたため、このタブの自動再接続を停止しました。（接続コード4001）");
+      renderAll();
+      return;
+    }
+    setConnection("error", "切断されました", "2秒後に自動再接続します");
+    log("system", `サーバーとの接続が切れました。対戦中は${state.playingDisconnectGraceSeconds}秒、待機中は${state.waitingDisconnectGraceSeconds}秒まで自動復帰を試みます。（接続コード${event.code}）`);
     state.reconnectTimer = window.setTimeout(connect, 2000);
     renderAll();
   });
 
-  state.ws.addEventListener("error", () => {
+  socket.addEventListener("error", () => {
+    if (state.ws !== socket) return;
+    recordConnectionDiagnostic("error");
     state.connected = false;
     state.globalChatSubscribed = false;
     state.globalChatJoining = false;
