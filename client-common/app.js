@@ -1790,11 +1790,24 @@ function confirmCpuSelection() {
   renderCpuChooser();
 }
 
+function isContinuingTurnAlternationSeries(participants) {
+  const seriesIds = state.turnAlternationSeries?.participant_ids;
+  if (!Array.isArray(seriesIds) || seriesIds.length !== 2) return false;
+  const participantIds = participants.map((player) => player.id);
+  return (
+    participantIds.length === 2
+    && seriesIds.includes(state.playerId)
+    && seriesIds.every((playerId) => participantIds.includes(playerId))
+  );
+}
+
 function startGame() {
-  const participantCount = state.players.filter((player) => player.status === "waiting").length;
+  const participants = state.players.filter((player) => player.status === "waiting");
+  const participantCount = participants.length;
+  const continuingSeries = isContinuingTurnAlternationSeries(participants);
   const alternate = Boolean(
     CONFIG.features.turnAlternation
-    && state.turnAlternationEnabled
+    && (state.turnAlternationEnabled || continuingSeries)
     && participantCount === 2
   );
   send({
@@ -1851,6 +1864,8 @@ function renderTurnOrderSettings() {
   const participants = state.players.filter((player) => player.status === "waiting");
   const twoPlayerGame = participants.length === 2;
   const pending = Boolean(state.startGameRequest);
+  const series = state.turnAlternationSeries;
+  const continuingSeries = isContinuingTurnAlternationSeries(participants);
   const controlsEnabled = (
     state.roomJoined
     && state.roomState !== "playing"
@@ -1860,12 +1875,15 @@ function renderTurnOrderSettings() {
     && !tournamentRoom
   );
   el.turnOrderSettings.classList.toggle("hidden", tournamentRoom);
-  el.turnAlternationToggle.checked = state.turnAlternationEnabled;
-  el.turnAlternationToggle.disabled = !controlsEnabled;
+  el.turnAlternationToggle.checked = state.turnAlternationEnabled || continuingSeries;
+  el.turnAlternationToggle.disabled = !controlsEnabled || continuingSeries;
   el.turnAlternationFirstSelect.value = state.turnAlternationFirst;
-  el.turnAlternationFirstSelect.disabled = !controlsEnabled || !state.turnAlternationEnabled;
+  el.turnAlternationFirstSelect.disabled = (
+    !controlsEnabled
+    || continuingSeries
+    || !state.turnAlternationEnabled
+  );
 
-  const series = state.turnAlternationSeries;
   const canEndSeries = Boolean(
     series
     && series.game_count > 0
@@ -1886,12 +1904,14 @@ function renderTurnOrderSettings() {
     el.endTurnAlternationSeriesBtn.disabled = !canEndSeries;
   }
 
-  if (!twoPlayerGame) {
+  if (continuingSeries) {
+    el.turnAlternationNote.textContent = "交互対戦中です。どちらのプレイヤーも承認なしで次局を開始できます。";
+  } else if (!twoPlayerGame) {
     el.turnAlternationNote.textContent = "2人対戦で使えます。1人プレイではこの設定を使用しません。";
   } else if (participants.some((player) => player.is_cpu)) {
     el.turnAlternationNote.textContent = "CPU戦では承認なしで開始し、同じ相手なら先手を交代します。";
   } else {
-    el.turnAlternationNote.textContent = "対人戦では、開始するたびに相手の承認が必要です。";
+    el.turnAlternationNote.textContent = "対人戦は初回だけ相手の承認が必要です。以後の再戦はどちらからでも開始できます。";
   }
   renderStartGameRequest();
 }
@@ -3540,6 +3560,39 @@ function isHnpChallengeSelection() {
   return !state.registeredPrimeValues.has(number);
 }
 
+function compositeSyntaxError(tokens, cards, assigned) {
+  if (!tokens.some((token) => token.kind === "op")) {
+    return "素因数分解には積または指数が最低1つ必要です。";
+  }
+  const byId = new Map(cards.map((card) => [card.card_id, card]));
+  let number = "";
+  let jokerIndex = 0;
+  let afterPower = false;
+  const checkNumber = () => {
+    if (!number) return "演算子の前後に材料札が必要です。";
+    if (number.startsWith("0")) return "最上位桁が0の数は作れません。";
+    if (number === "1") {
+      return afterPower ? "指数は途中も含めてすべて2以上にしてください。" : "底が0または1は不可です。";
+    }
+    return "";
+  };
+  for (const token of tokens) {
+    if (token.kind === "card") {
+      const card = byId.get(token.card_id);
+      if (!card) return "未知のカードが式に含まれています。";
+      number += String(card.is_joker ? assigned[jokerIndex++] : card.rank);
+    } else if (token.kind === "op" && (token.op === "×" || token.op === "^")) {
+      const error = checkNumber();
+      if (error) return error;
+      number = "";
+      afterPower = token.op === "^";
+    } else {
+      return "合成数の式に不正な演算子があります。";
+    }
+  }
+  return checkNumber();
+}
+
 function playSelected() {
   if (!state.selectedCards.length) return;
   if (state.compositeMode) {
@@ -3554,6 +3607,11 @@ function playSelected() {
     }
     if (state.compositeJokerAssign.some((value) => String(value) === "inf")) {
       log("error", "合成数出しゾーンのジョーカー値を数字にしてください。");
+      return;
+    }
+    const syntaxError = compositeSyntaxError(state.compositeTokens, state.hand, state.compositeJokerAssign);
+    if (syntaxError) {
+      log("error", syntaxError);
       return;
     }
     send({
