@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>素数大富豪＋</title>
-    <link rel="stylesheet" href="./client-common/styles.css?v=shared-a0343d19e4cb" />
-    <link rel="stylesheet" href="./theme.css?v=plus-20260805-2" />
+    <link rel="stylesheet" href="./client-common/styles.css?v=shared-17d3321cbf7c" />
+    <link rel="stylesheet" href="./theme.css?v=plus-tournament-20260923" />
   </head>
   <body>
     <main class="app-shell">
@@ -140,17 +140,6 @@
       </section>
 
       <section id="roomPanel" class="room-layout hidden">
-        <nav id="tournamentWorkspaceTabs" class="tournament-workspace-tabs hidden" data-feature="tournament" aria-label="大会画面">
-          <button id="tournamentLobbyViewTab" class="active" type="button" aria-pressed="true">
-            ロビー
-            <span id="tournamentLobbyUnreadBadge" class="chat-unread hidden" aria-label="ロビーの未読"></span>
-          </button>
-          <button id="tournamentMatchViewTab" type="button" aria-pressed="false">
-            対戦・観戦
-            <span id="tournamentMatchViewBadge" class="tournament-view-badge hidden"></span>
-          </button>
-        </nav>
-
         <aside id="sideColumn" class="side-column">
           <div class="panel status-panel">
             <div class="room-title-row">
@@ -226,19 +215,9 @@
                 <button id="cancelStartRequestBtn" class="ghost-button compact" type="button">取り消す</button>
               </div>
             </details>
-            <p id="reconnectPolicyNote" class="microcopy">切断復帰猶予を読み込み中です。</p>
-            <div id="cpuChooser" class="cpu-chooser hidden">
-              <div class="cpu-chooser-heading">
-                <label for="cpuProfileSelect">対戦するCPU</label>
-                <button id="cpuChooserCloseBtn" class="ghost-button compact" type="button">閉じる</button>
-              </div>
-              <select id="cpuProfileSelect" class="full-select"></select>
-              <p id="cpuProfileDescription" class="cpu-profile-description"></p>
-              <button id="confirmCpuBtn" class="secondary-button" type="button">このCPUを追加</button>
-            </div>
-          </div>
-
-          <div id="tournamentPanel" class="panel tournament-panel" data-feature="tournament">
+            <details id="tournamentDetails" class="turn-order-settings tournament-details hidden" data-feature="tournament">
+              <summary>大会情報・参加・順位</summary>
+          <div id="tournamentPanel" class="tournament-panel" data-feature="tournament">
             <div class="tournament-heading">
               <div>
                 <p class="eyebrow">SYSTEM TOURNAMENT</p>
@@ -258,7 +237,6 @@
               <button id="tournamentRegisterBtn" class="primary-button" type="button">大会に参加登録</button>
               <button id="tournamentWithdrawBtn" class="ghost-button" type="button">参加取消</button>
             </div>
-            <div id="tournamentPairing" class="tournament-pairing hidden"></div>
             <div class="tournament-league-wrap">
               <strong>リーグ表</strong>
               <div id="tournamentLeagueTable" class="tournament-league-table"></div>
@@ -270,6 +248,19 @@
             <p id="tournamentTimingNote" class="microcopy">
               対戦呼び出しと切断復帰の猶予時間を読み込み中です。
             </p>
+          </div>
+
+            </details>
+            <p id="reconnectPolicyNote" class="microcopy">切断復帰猶予を読み込み中です。</p>
+            <div id="cpuChooser" class="cpu-chooser hidden">
+              <div class="cpu-chooser-heading">
+                <label for="cpuProfileSelect">対戦するCPU</label>
+                <button id="cpuChooserCloseBtn" class="ghost-button compact" type="button">閉じる</button>
+              </div>
+              <select id="cpuProfileSelect" class="full-select"></select>
+              <p id="cpuProfileDescription" class="cpu-profile-description"></p>
+              <button id="confirmCpuBtn" class="secondary-button" type="button">このCPUを追加</button>
+            </div>
           </div>
 
           <details id="registerPanel" class="panel register-panel" data-feature="registration">
@@ -291,17 +282,29 @@
           </details>
         </aside>
 
+        <div id="tournamentPairing" class="panel tournament-pairing hidden" data-feature="tournament" role="status"></div>
+        <div id="tournamentStage" class="tournament-stage">
+          <div id="tournamentStageControls" class="button-row hidden" data-feature="tournament">
+            <button id="tournamentShowMatchesBtn" class="secondary-button" type="button">観戦一覧へ</button>
+            <button id="tournamentShowFinishedBtn" class="ghost-button" type="button">自分の対戦結果へ</button>
+          </div>
+          <section id="tournamentFinishedPanel" class="hidden" data-feature="tournament">
+            <p id="tournamentFinishedResult" class="next-hint" role="status"></p>
+            <div id="tournamentFinishedBoard"></div>
+          </section>
         <section id="tournamentSpectatorPanel" class="panel tournament-spectator-panel hidden" data-feature="tournament">
           <div class="tournament-spectator-heading">
             <div>
               <p class="eyebrow">LIVE MATCHES</p>
-              <h2>進行中の対戦</h2>
+              <h2 id="tournamentSpectatorHeading">進行中の対戦</h2>
             </div>
             <span id="tournamentSpectatorStatus" class="tournament-status-badge">待機中</span>
           </div>
+          <div id="tournamentSpectatorList">
           <p class="tournament-spectator-help">観戦する対戦を選んでください。手札の内容は公開されません。</p>
           <div id="tournamentMatchCards" class="tournament-match-cards"></div>
           <p id="tournamentSpectatorEmpty" class="tournament-spectator-empty">現在進行中の対戦はありません。</p>
+          </div>
           <div id="tournamentSpectatorBoard" class="tournament-spectator-board hidden">
             <div class="tournament-spectator-title-row">
               <strong id="tournamentSpectatorTitle">対戦を選択してください</strong>
@@ -401,11 +404,8 @@
               </div>
             </section>
           </div>
-          <div id="tournamentMatchLogPanel" class="panel tournament-match-log-panel hidden" data-feature="tournament">
-            <h2 class="game-section-title">対戦ログ</h2>
-            <div id="tournamentMatchLogBox" class="log-box"></div>
-          </div>
         </section>
+        </div>
 
         <aside id="logColumn" class="log-column">
           <div class="panel log-panel">
@@ -414,6 +414,11 @@
               <div class="chat-tabs" role="tablist" aria-label="チャットの範囲">
                 <button id="roomChatTab" class="chat-tab active" type="button" role="tab" aria-selected="true" aria-controls="roomLogBox">
                   <span id="roomChatTabLabel">部屋</span>
+                  <span id="tournamentLobbyUnreadBadge" class="chat-unread hidden" aria-label="ロビーの未読"></span>
+                </button>
+                <button id="tournamentChatTab" class="chat-tab hidden" data-feature="tournament" type="button" role="tab" aria-selected="false" aria-controls="tournamentMatchLogBox">
+                  対戦
+                  <span id="tournamentMatchUnreadBadge" class="chat-unread hidden" aria-label="対戦の未読"></span>
                 </button>
                 <button id="globalChatTab" class="chat-tab" data-feature="globalChat" type="button" role="tab" aria-selected="false" aria-controls="globalLogBox">
                   グローバル
@@ -444,6 +449,7 @@
               <button id="chatBtn" class="ghost-button compact" type="button">送信</button>
             </div>
             <div id="roomLogBox" class="log-box" role="tabpanel" aria-labelledby="roomChatTab"></div>
+            <div id="tournamentMatchLogBox" class="log-box hidden" data-feature="tournament" role="tabpanel" aria-labelledby="tournamentChatTab"></div>
             <div id="globalLogBox" class="log-box global-log-box hidden" data-feature="globalChat" role="tabpanel" aria-labelledby="globalChatTab"></div>
           </div>
         </aside>
@@ -486,6 +492,6 @@
     </dialog>
 
     <script src="./product-config.js?v=plus-20260922-1"></script>
-    <script src="./client-common/app.js?v=shared-a0343d19e4cb"></script>
+    <script src="./client-common/app.js?v=shared-17d3321cbf7c"></script>
   </body>
 </html>

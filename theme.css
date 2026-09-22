@@ -12,6 +12,69 @@
   background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.13), transparent 45%), #fff;
 }
 
+.tournament-stage,
+#tournamentFinishedPanel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tournament-details .tournament-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  min-width: 0;
+}
+
+.tournament-unified .side-column > .status-panel {
+  border-radius: 14px;
+}
+
+.tournament-unified #tournamentFinishedResult {
+  margin: 0;
+}
+
+#tournamentFinishedBoard .playing-card:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.tournament-unified #tournamentStageControls:has(button:not(.hidden)) {
+  min-height: 36px;
+}
+
+body[data-mode="playing"] .tournament-unified .status-panel {
+  padding: 18px;
+}
+
+body[data-mode="playing"] .tournament-unified .room-title-row h2 {
+  font-size: 1.2rem;
+}
+
+body[data-mode="playing"] .tournament-unified .next-hint {
+  display: block;
+}
+
+body[data-mode="playing"] .tournament-unified .tournament-details {
+  display: block;
+}
+
+.tournament-unified .status-list > div,
+.tournament-unified .room-title-row > div:first-child {
+  min-width: 0;
+}
+
+.tournament-unified #roomBadge,
+.tournament-unified #playerList {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  body[data-mode="playing"] .tournament-unified .status-panel {
+    padding: 12px;
+  }
+}
+
 .tournament-heading,
 .tournament-pairing {
   display: flex;

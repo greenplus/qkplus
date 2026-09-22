@@ -91,7 +91,10 @@ const state = {
   tournament: null,
   tournamentParticipantId: null,
   tournamentCountdownTimer: null,
-  tournamentWorkspaceMode: "lobby",
+  tournamentView: "list",
+  tournamentOwnMatch: null,
+  tournamentFinishedMatch: null,
+  tournamentChatRunId: null,
   tournamentLobbyUnreadCount: 0,
   tournamentMatchUnreadCount: 0,
   tournamentObservedMatchId: null,
@@ -346,11 +349,7 @@ function bindElements() {
     "roomGroupSecondaryBtn",
     "roomGroupTertiaryBtn",
     "tournamentTabNotice",
-    "tournamentWorkspaceTabs",
-    "tournamentLobbyViewTab",
-    "tournamentMatchViewTab",
     "tournamentLobbyUnreadBadge",
-    "tournamentMatchViewBadge",
     "roomPickerHint",
     "roomList",
     "practiceBtn",
@@ -483,8 +482,18 @@ function bindElements() {
     "tournamentSpectatorPlayers",
     "tournamentSpectatorScore",
     "gameColumn",
-    "tournamentMatchLogPanel",
     "tournamentMatchLogBox",
+    "tournamentDetails",
+    "tournamentStageControls",
+    "tournamentSpectatorHeading",
+    "tournamentShowMatchesBtn",
+    "tournamentShowFinishedBtn",
+    "tournamentFinishedPanel",
+    "tournamentFinishedResult",
+    "tournamentFinishedBoard",
+    "tournamentSpectatorList",
+    "tournamentChatTab",
+    "tournamentMatchUnreadBadge",
     "chatPanelTitle",
     "roomChatTabLabel",
   ].forEach((id) => {
@@ -586,12 +595,14 @@ function bindEvents() {
   el.campaignDialogCloseBtn.addEventListener("click", closeCampaignResult);
   if (el.tournamentRegisterBtn) el.tournamentRegisterBtn.addEventListener("click", registerForTournament);
   if (el.tournamentWithdrawBtn) el.tournamentWithdrawBtn.addEventListener("click", withdrawFromTournament);
-  if (el.tournamentLobbyViewTab) {
-    el.tournamentLobbyViewTab.addEventListener("click", () => switchTournamentWorkspace("lobby"));
-  }
-  if (el.tournamentMatchViewTab) {
-    el.tournamentMatchViewTab.addEventListener("click", () => switchTournamentWorkspace("match"));
-  }
+  el.tournamentChatTab?.addEventListener("click", () => switchChatMode("match"));
+  el.tournamentShowMatchesBtn?.addEventListener("click", showTournamentMatchList);
+  el.tournamentShowFinishedBtn?.addEventListener("click", () => {
+    if (!state.tournamentFinishedMatch || state.roomState === "playing") return;
+    stopTournamentWatch();
+    state.tournamentView = "finished";
+    renderAll();
+  });
   if (el.tournamentMatchCards) {
     el.tournamentMatchCards.addEventListener("click", (event) => {
       const button = event.target.closest("[data-tournament-match-id]");
@@ -984,6 +995,7 @@ function handleMessage(msg) {
       state.roomState = msg.room_state || "waiting";
       state.turnAlternationSeries = msg.turn_alternation_series || null;
       state.appMode = msg.room_state === "playing" ? "playing" : "room";
+      if (isTournamentRoom() && msg.room_state === "playing") state.tournamentView = "own";
       state.playingDisconnectGraceSeconds = msg.playing_disconnect_grace_seconds ?? state.playingDisconnectGraceSeconds;
       state.waitingDisconnectGraceSeconds = msg.waiting_disconnect_grace_seconds ?? state.waitingDisconnectGraceSeconds;
       syncTurnClock(msg);
@@ -1076,7 +1088,7 @@ function handleMessage(msg) {
       state.appMode = "setup";
       state.roomState = "waiting";
       state.isWaiting = false;
-      state.tournamentWorkspaceMode = "lobby";
+      state.tournamentView = "list";
       state.tournamentObservedMatchId = null;
       state.tournamentObservedMatch = null;
       clearTurnClock();
@@ -1085,8 +1097,7 @@ function handleMessage(msg) {
       break;
     case "tournament_match_call":
       setTournamentState(msg.tournament || state.tournament);
-      log("system", msg.message || "あなたの対戦です。大会パネルを確認してください。");
-      state.tournamentMatchUnreadCount += 1;
+      log("system", msg.message || "あなたの対戦です。呼び出しの「この対戦に参加」を押してください。");
       playPlayerJoinedSound();
       break;
     case "tournament_match_ready_ack":
@@ -1095,39 +1106,37 @@ function handleMessage(msg) {
       break;
     case "tournament_match_started":
       setTournamentState(msg.tournament || state.tournament);
-      state.tournamentWorkspaceMode = "match";
-      state.tournamentMatchUnreadCount = 0;
+      state.tournamentView = "own";
+      state.tournamentOwnMatch = ownTournamentMatch() || { match_id: msg.match_id, round_no: msg.round_no };
+      state.tournamentFinishedMatch = null;
+      el.tournamentFinishedBoard?.replaceChildren();
       state.tournamentObservedMatchId = null;
       state.tournamentObservedMatch = null;
-      logTournamentMatch("system", `第${msg.round_no}ラウンドの対戦を開始しました。`);
+      logTournamentMatch("system", `第${msg.round_no}ラウンド ${state.tournamentOwnMatch.player1_name || ""} vs ${state.tournamentOwnMatch.player2_name || ""} の対戦を開始しました。`);
       break;
     case "tournament_return_to_lobby":
       setTournamentState(msg.tournament || state.tournament);
       state.appMode = "room";
       state.roomState = "waiting";
-      state.tournamentWorkspaceMode = "lobby";
-      state.tournamentObservedMatchId = null;
-      state.tournamentObservedMatch = null;
       clearTurnClock();
-      log("system", "大会ロビーへ戻りました。");
+      log("system", "対戦が終了しました。次の呼び出しまで観戦できます。");
       break;
     case "tournament_match_summary":
       updateTournamentMatchSummary(msg.match);
       break;
     case "tournament_match_view_update":
-      state.tournamentObservedMatchId = msg.match?.match_id || state.tournamentObservedMatchId;
+      if (msg.match?.match_id !== state.tournamentObservedMatchId || state.tournamentView !== "watch") break;
       state.tournamentObservedMatch = msg.match || null;
       updateTournamentMatchSummary(msg.match);
       break;
     case "tournament_match_view_ended":
-      state.tournamentObservedMatchId = msg.match?.match_id || state.tournamentObservedMatchId;
+      if (msg.match?.match_id !== state.tournamentObservedMatchId || state.tournamentView !== "watch") break;
       state.tournamentObservedMatch = msg.match || null;
       updateTournamentMatchSummary(msg.match);
-      if (state.tournamentWorkspaceMode !== "match") state.tournamentMatchUnreadCount += 1;
       break;
     case "tournament_score_record":
       logTournamentScoreRecord(msg);
-      if (state.tournamentWorkspaceMode !== "lobby") state.tournamentLobbyUnreadCount += 1;
+      if (state.chatMode !== "room") state.tournamentLobbyUnreadCount += 1;
       break;
     case "tournament_withdrawn":
       removeTournamentResumeToken(msg.run_id);
@@ -1161,6 +1170,14 @@ function handleMessage(msg) {
       log(msg.status === "accepted" ? "system" : "error", msg.message || "開始申請を終了しました。");
       break;
     case "game_start":
+      if (isTournamentRoom()) {
+        state.tournamentView = "own";
+        state.tournamentOwnMatch = ownTournamentMatch() || state.tournamentOwnMatch;
+        state.tournamentFinishedMatch = null;
+        state.tournamentObservedMatchId = null;
+        state.tournamentObservedMatch = null;
+        el.tournamentFinishedBoard?.replaceChildren();
+      }
       clearStartGameRequest();
       state.appMode = "playing";
       state.roomState = "playing";
@@ -1191,6 +1208,10 @@ function handleMessage(msg) {
       if (typeof msg.hnp_challenge_enabled === "boolean") state.hnpChallengeEnabled = msg.hnp_challenge_enabled;
       renderField(msg);
       renderPlayers(msg.player_list || [], null);
+      if (isTournamentRoom() && msg.state === "playing") {
+        state.tournamentView = "own";
+        state.tournamentOwnMatch = ownTournamentMatch() || state.tournamentOwnMatch;
+      }
       scheduleAssist();
       break;
     case "turn_update":
@@ -1222,6 +1243,7 @@ function handleMessage(msg) {
     case "penalty":
       break;
     case "game_over":
+      if (isTournamentRoom() && !state.tournamentFinishedMatch) captureTournamentFinishedMatch(msg);
       state.roomState = msg.state || "waiting";
       state.appMode = "room";
       state.hand = [];
@@ -1246,10 +1268,9 @@ function handleMessage(msg) {
     case "chat":
       if (msg.scope === "tournament_match") {
         logTournamentMatch(msg.sender || "system", msg.message || "", msg.action);
-        if (state.tournamentWorkspaceMode !== "match") state.tournamentMatchUnreadCount += 1;
       } else {
         log(msg.sender || "chat", msg.message || "", el.roomLogBox, msg.action);
-        if (msg.scope === "tournament_lobby" && state.tournamentWorkspaceMode !== "lobby") {
+        if (msg.scope === "tournament_lobby" && state.chatMode !== "room") {
           state.tournamentLobbyUnreadCount += 1;
         }
       }
@@ -1282,7 +1303,9 @@ function handleMessage(msg) {
         log("error", "保存したカスタマイズを復元できなかったため、部屋の既定表を読み込みます。");
         loadSample();
       }
-      if (state.chatMode === "global") {
+      if (msg.code === "tournament_match_chat") {
+        logTournamentMatch("error", msg.message || "対戦チャットを送信できませんでした。");
+      } else if (state.chatMode === "global") {
         state.globalChatJoining = false;
         logGlobalSystem(msg.message || "エラーが発生しました。");
       } else {
@@ -1294,7 +1317,22 @@ function handleMessage(msg) {
 }
 
 function setTournamentState(tournament) {
+  if (tournament?.run_id && state.tournamentChatRunId !== tournament.run_id) {
+    state.tournamentChatRunId = tournament.run_id;
+    state.tournamentView = "list";
+    state.tournamentOwnMatch = null;
+    state.tournamentFinishedMatch = null;
+    state.tournamentObservedMatchId = null;
+    state.tournamentObservedMatch = null;
+    state.tournamentLobbyUnreadCount = 0;
+    state.tournamentMatchUnreadCount = 0;
+    el.roomLogBox?.replaceChildren();
+    el.tournamentMatchLogBox?.replaceChildren();
+    el.tournamentFinishedBoard?.replaceChildren();
+  }
   state.tournament = tournament;
+  const ownUpdate = (tournament?.active_matches || []).find(item => item.match_id === state.tournamentOwnMatch?.match_id);
+  if (ownUpdate) state.tournamentOwnMatch = { ...state.tournamentOwnMatch, ...ownUpdate };
   (tournament?.active_matches || []).forEach((match) => syncServerClock(match.server_now));
   if (tournament?.room_id) state.tournaments[tournament.room_id] = tournament;
   if (tournament?.viewer_participant_id) {
@@ -1310,6 +1348,9 @@ function updateTournamentMatchSummary(match) {
   if (index >= 0) matches[index] = { ...matches[index], ...match };
   else matches.push(match);
   state.tournament.active_matches = matches;
+  if (state.tournamentOwnMatch?.match_id === match.match_id) {
+    state.tournamentOwnMatch = { ...state.tournamentOwnMatch, ...match };
+  }
   if (state.tournamentObservedMatchId === match.match_id) {
     state.tournamentObservedMatch = { ...(state.tournamentObservedMatch || {}), ...match };
   }
@@ -1323,36 +1364,51 @@ function ownTournamentMatch() {
   )) || null;
 }
 
-function switchTournamentWorkspace(mode) {
-  if (!["lobby", "match"].includes(mode) || !state.roomJoined || !isTournamentRoom()) return;
-  state.tournamentWorkspaceMode = mode;
-  if (mode === "lobby") {
-    state.tournamentLobbyUnreadCount = 0;
-  } else {
-    state.tournamentMatchUnreadCount = 0;
-    const ownMatch = ownTournamentMatch();
-    if (state.roomState !== "playing" && !state.tournamentObservedMatchId) {
-      const match = ownMatch || (state.tournament?.active_matches || []).find((item) => (
-        ["called", "playing"].includes(item.status)
-      ));
-      if (match) watchTournamentMatch(match.match_id);
-    }
-  }
+function stopTournamentWatch() {
+  if (state.tournamentObservedMatchId) send({ type: "tournament_unwatch_match" });
+  state.tournamentObservedMatchId = null;
+  state.tournamentObservedMatch = null;
+}
+
+function showTournamentMatchList() {
+  if (!state.roomJoined || !isTournamentRoom() || state.roomState === "playing") return;
+  stopTournamentWatch();
+  state.tournamentView = "list";
   renderAll();
 }
 
 function watchTournamentMatch(matchId) {
-  if (!matchId || !state.roomJoined || !isTournamentRoom()) return;
-  const ownMatch = ownTournamentMatch();
-  if (state.roomState === "playing" && ownMatch && ownMatch.match_id !== matchId) return;
+  if (!matchId || !state.roomJoined || !isTournamentRoom() || state.roomState === "playing") return;
+  const match = (state.tournament?.active_matches || []).find(item => item.match_id === matchId);
+  if (!match || !["called", "playing"].includes(match.status)) return;
   state.tournamentObservedMatchId = matchId;
-  state.tournamentObservedMatch = (state.tournament?.active_matches || []).find(
-    (match) => match.match_id === matchId,
-  ) || null;
-  state.tournamentWorkspaceMode = "match";
-  state.tournamentMatchUnreadCount = 0;
+  state.tournamentObservedMatch = match;
+  state.tournamentView = "watch";
   send({ type: "tournament_watch_match", match_id: matchId });
   renderAll();
+}
+
+function captureTournamentFinishedMatch(message) {
+  if (!el.tournamentFinishedBoard || !state.tournamentOwnMatch) return;
+  state.tournamentFinishedMatch = { ...state.tournamentOwnMatch, winner_name: message.winner, status: "completed" };
+  const board = el.gameColumn.cloneNode(true);
+  board.classList.remove("hidden");
+  board.removeAttribute("id");
+  const badge = board.querySelector("#turnBadge");
+  if (badge) badge.textContent = "対戦終了";
+  const clock = board.querySelector("#turnClockValue");
+  if (clock) clock.textContent = "終了";
+  const clockLabel = board.querySelector("#turnClockLabel");
+  if (clockLabel) clockLabel.textContent = "時間";
+  board.querySelector("#turnClockMetric")?.setAttribute("aria-label", "対戦終了");
+  board.querySelectorAll(".clock-warning, .clock-danger, .clock-urgent").forEach(node => {
+    node.classList.remove("clock-warning", "clock-danger", "clock-urgent");
+  });
+  if (!state.hand.length) board.querySelector("#handCards").textContent = "手札 0枚";
+  board.querySelectorAll("[id]").forEach(node => node.removeAttribute("id"));
+  board.querySelectorAll("button, input, select").forEach(node => { node.disabled = true; });
+  el.tournamentFinishedBoard.replaceChildren(board);
+  state.tournamentView = "finished";
 }
 
 function readTournamentTokens() {
@@ -1726,7 +1782,7 @@ function leaveRoom() {
   state.handCounts = [];
   state.firstPlayerId = null;
   clearTurnClock();
-  state.tournamentWorkspaceMode = "lobby";
+  state.tournamentView = "list";
   state.tournamentLobbyUnreadCount = 0;
   state.tournamentMatchUnreadCount = 0;
   state.tournamentObservedMatchId = null;
@@ -2545,8 +2601,8 @@ function renderTournament() {
       : "大会に参加登録";
   el.tournamentWithdrawBtn.classList.toggle("hidden", !registered || tournament?.status !== "registration");
 
-  const pairing = tournament?.current_match;
-  el.tournamentPairing.classList.toggle("hidden", !pairing);
+  const pairing = ownTournamentMatch();
+  el.tournamentPairing.classList.toggle("hidden", !pairing || pairing.status !== "called");
   if (pairing) {
     const isViewerMatch = [pairing.player1_id, pairing.player2_id].includes(state.tournamentParticipantId);
     const viewerReady = (pairing.ready_player_ids || []).includes(state.tournamentParticipantId);
@@ -2597,57 +2653,55 @@ function renderTournament() {
 }
 
 function renderTournamentWorkspace() {
-  if (!el.tournamentWorkspaceTabs) return;
+  if (!el.tournamentDetails) return;
   const visible = state.roomJoined && isTournamentRoom();
-  el.tournamentWorkspaceTabs.classList.toggle("hidden", !visible);
+  el.roomPanel.classList.toggle("tournament-unified", visible);
+  el.sideColumn?.classList.remove("hidden");
+  el.logColumn?.classList.remove("hidden");
+  el.tournamentDetails.classList.toggle("hidden", !visible);
   if (!visible) {
-    el.sideColumn?.classList.remove("hidden");
     el.gameColumn?.classList.remove("hidden");
-    el.logColumn?.classList.remove("hidden");
     el.tournamentSpectatorPanel?.classList.add("hidden");
-    el.tournamentMatchLogPanel?.classList.add("hidden");
-    if (el.chatPanelTitle) el.chatPanelTitle.textContent = "チャット";
-    if (el.roomChatTabLabel) el.roomChatTabLabel.textContent = "部屋";
-    el.globalChatTab?.classList.remove("hidden");
+    el.tournamentFinishedPanel?.classList.add("hidden");
+    el.tournamentStageControls?.classList.add("hidden");
+    el.tournamentPairing?.classList.add("hidden");
     return;
   }
-
-  if (state.chatMode !== "room") state.chatMode = "room";
-  const lobbyVisible = state.tournamentWorkspaceMode === "lobby";
-  const ownMatchVisible = !lobbyVisible && state.roomState === "playing";
-  el.sideColumn?.classList.toggle("hidden", !lobbyVisible);
-  el.logColumn?.classList.toggle("hidden", !lobbyVisible);
-  el.gameColumn?.classList.toggle("hidden", !ownMatchVisible);
-  el.tournamentSpectatorPanel?.classList.toggle("hidden", lobbyVisible || ownMatchVisible);
-  el.tournamentMatchLogPanel?.classList.toggle("hidden", !ownMatchVisible);
-  el.tournamentLobbyViewTab.classList.toggle("active", lobbyVisible);
-  el.tournamentMatchViewTab.classList.toggle("active", !lobbyVisible);
-  el.tournamentLobbyViewTab.setAttribute("aria-pressed", String(lobbyVisible));
-  el.tournamentMatchViewTab.setAttribute("aria-pressed", String(!lobbyVisible));
-
-  const unread = state.tournamentLobbyUnreadCount;
-  el.tournamentLobbyUnreadBadge.classList.toggle("hidden", unread === 0 || lobbyVisible);
-  el.tournamentLobbyUnreadBadge.textContent = unread > 9 ? "9+" : String(unread);
-  const activeMatches = (state.tournament?.active_matches || []).filter((match) => (
-    ["called", "playing"].includes(match.status)
-  ));
-  const ownMatch = ownTournamentMatch();
-  const matchBadge = state.roomState === "playing"
-    ? (isMyTurn() ? "あなたの手番" : "対戦中")
-    : ownMatch?.status === "called"
-      ? "呼出中"
-      : activeMatches.length
-        ? `${activeMatches.length}試合`
-        : state.tournamentMatchUnreadCount
-          ? "更新あり"
-          : "";
-  el.tournamentMatchViewBadge.textContent = matchBadge;
-  el.tournamentMatchViewBadge.classList.toggle("hidden", !matchBadge);
-  if (el.chatPanelTitle) el.chatPanelTitle.textContent = "大会ロビー";
-  if (el.roomChatTabLabel) el.roomChatTabLabel.textContent = "進行・チャット";
-  el.globalChatTab?.classList.add("hidden");
-  renderChat();
+  const ownVisible = state.roomState === "playing";
+  const finishedVisible = !ownVisible && state.tournamentView === "finished" && !!state.tournamentFinishedMatch;
+  const watching = !ownVisible && state.tournamentView === "watch" && !!state.tournamentObservedMatch;
+  const activeMatches = (state.tournament?.active_matches || []).filter(match => ["called", "playing"].includes(match.status));
+  el.gameColumn.classList.toggle("hidden", !ownVisible);
+  el.tournamentFinishedPanel.classList.toggle("hidden", !finishedVisible);
+  el.tournamentSpectatorPanel.classList.toggle("hidden", ownVisible || finishedVisible);
+  el.tournamentStageControls.classList.toggle("hidden", ownVisible || (!finishedVisible && !watching && !state.tournamentFinishedMatch));
+  el.tournamentShowMatchesBtn.classList.toggle("hidden", (!finishedVisible && !watching) || (finishedVisible && !activeMatches.length));
+  el.tournamentShowFinishedBtn.classList.toggle("hidden", finishedVisible || !state.tournamentFinishedMatch);
+  el.tournamentFinishedResult.textContent = state.tournamentFinishedMatch?.winner_name
+    ? `対戦終了 · ${state.tournamentFinishedMatch.winner_name}の勝利`
+    : "対戦終了";
   renderTournamentSpectator(activeMatches);
+  const shownMatch = ownVisible ? state.tournamentOwnMatch
+    : finishedVisible ? state.tournamentFinishedMatch : watching ? state.tournamentObservedMatch : null;
+  const place = shownMatch ? `第${shownMatch.round_no || "-"}ラウンド${shownMatch.table_no ? `・第${shownMatch.table_no}卓` : ""}` : "";
+  el.roomHeading.textContent = ownVisible ? `大会 対戦場所 · ${place}`
+    : finishedVisible ? `大会 対戦終了 · ${place}`
+    : watching ? `大会 観戦場所 · ${place}` : "大会ロビー";
+  el.roomBadge.textContent = [state.tournament?.title, state.tournament?.rule?.summary].filter(Boolean).join(" / ");
+  el.playStatus.textContent = ownVisible ? "対戦中" : finishedVisible ? "対戦終了"
+    : watching ? (["completed", "skipped"].includes(shownMatch.status) ? "観戦終了" : "観戦中")
+    : ownTournamentMatch()?.status === "called" ? "呼び出し中" : "大会待機中";
+  if (shownMatch) {
+    el.playerList.textContent = [shownMatch.player1_name, shownMatch.player2_name].filter(Boolean).join("、") || el.playerList.textContent;
+    el.watcherList.textContent = `${shownMatch.viewer_count || 0}人`;
+  } else {
+    el.playerList.textContent = (state.tournament?.participants || []).map(p => p.display_name).join("、") || "なし";
+    el.watcherList.textContent = state.players.filter(p => p.status !== "waiting").map(playerLabel).join("、") || "なし";
+  }
+  el.playerList.title = el.playerList.textContent;
+  el.watcherList.title = el.watcherList.textContent;
+  if (ownVisible) renderFieldCards();
+  renderChat();
 }
 
 function renderTournamentSpectator(activeMatches) {
@@ -2676,9 +2730,10 @@ function renderTournamentSpectator(activeMatches) {
     el.tournamentMatchCards.appendChild(button);
   });
 
-  const selected = state.tournamentObservedMatch
-    || activeMatches.find((match) => match.match_id === state.tournamentObservedMatchId)
-    || null;
+  const selected = state.tournamentView === "watch" ? state.tournamentObservedMatch : null;
+  if (el.tournamentSpectatorHeading) el.tournamentSpectatorHeading.textContent = !selected ? "進行中の対戦"
+    : ["completed", "skipped"].includes(selected.status) ? "観戦した対戦" : "観戦中の対戦";
+  el.tournamentSpectatorList.classList.toggle("hidden", !!selected);
   el.tournamentSpectatorEmpty.classList.toggle("hidden", Boolean(selected));
   el.tournamentSpectatorEmpty.textContent = activeMatches.length
     ? "観戦する対戦を選んでください。"
@@ -2733,7 +2788,7 @@ function renderTournamentSpectator(activeMatches) {
   ].forEach(([participantId, name]) => {
     const player = document.createElement("div");
     player.className = "tournament-spectator-player";
-    player.classList.toggle("current", selected.current_turn_participant_id === participantId);
+    player.classList.toggle("current", selected.status === "playing" && selected.current_turn_participant_id === participantId);
     const playerName = document.createElement("strong");
     playerName.textContent = name || "プレイヤー";
     const detail = document.createElement("small");
@@ -2768,7 +2823,7 @@ function tournamentReadySecondsRemaining(pairing) {
 
 function renderTournamentCallCountdown() {
   if (!state.roomJoined || !isTournamentRoom()) return;
-  const pairing = state.tournament?.current_match;
+  const pairing = ownTournamentMatch();
   const note = el.tournamentPairing?.querySelector("[data-tournament-countdown]");
   if (!pairing || !note) return;
   const isViewerMatch = [pairing.player1_id, pairing.player2_id].includes(state.tournamentParticipantId);
@@ -3116,10 +3171,12 @@ function renderNextHint() {
       el.nextHint.textContent = state.tournament?.status === "registration"
         ? state.tournamentParticipantId
           ? "参加登録済みです。開始時刻になるとシステムが組合せと対戦を進行します。"
-          : "大会パネルの「大会に参加登録」を押してください。"
+          : "「大会情報・参加・順位」を開き、「大会に参加登録」を押してください。"
         : state.tournament?.status === "running"
           ? "大会進行中です。対戦者に選ばれると自動でゲームが始まります。"
-          : "次回大会の日程と受付開始をお待ちください。";
+          : state.tournament?.status === "finished"
+            ? "大会が終了しました。「大会情報・参加・順位」から最終結果を確認できます。"
+            : "次回大会の日程と受付開始をお待ちください。";
       return;
     }
     if (!state.isWaiting) {
@@ -3755,8 +3812,11 @@ function isMyTurn() {
 }
 
 function switchChatMode(mode) {
-  if (!['room', 'global'].includes(mode)) return;
+  if (!['room', 'global', 'match'].includes(mode)) return;
+  if (mode === "match" && !isTournamentRoom()) return;
   state.chatMode = mode;
+  if (mode === "room") state.tournamentLobbyUnreadCount = 0;
+  if (mode === "match") state.tournamentMatchUnreadCount = 0;
   if (mode === "global" && state.globalChatSubscribed) state.globalUnreadCount = 0;
   renderChat();
 }
@@ -3774,10 +3834,28 @@ function sendGlobalTemplate(templateKey) {
 }
 
 function renderChat() {
+  const tournament = state.roomJoined && isTournamentRoom();
+  if ((tournament && state.chatMode === "global") || (!tournament && state.chatMode === "match")) state.chatMode = "room";
+  const matchChat = tournament && state.chatMode === "match";
+  el.globalChatTab.classList.toggle("hidden", tournament);
+  el.tournamentChatTab?.classList.toggle("hidden", !tournament);
+  if (el.chatPanelTitle) el.chatPanelTitle.textContent = "チャット";
+  if (el.roomChatTabLabel) el.roomChatTabLabel.textContent = tournament ? "ロビー" : "部屋";
+  el.tournamentChatTab?.classList.toggle("active", matchChat);
+  el.tournamentChatTab?.setAttribute("aria-selected", String(matchChat));
+  el.tournamentMatchLogBox?.classList.toggle("hidden", !matchChat);
+  for (const [badge, count, selected] of [
+    [el.tournamentLobbyUnreadBadge, state.tournamentLobbyUnreadCount, state.chatMode === "room"],
+    [el.tournamentMatchUnreadBadge, state.tournamentMatchUnreadCount, matchChat],
+  ]) {
+    if (!badge) continue;
+    badge.classList.toggle("hidden", !tournament || !count || selected);
+    badge.textContent = count > 9 ? "9+" : String(count);
+  }
   const isGlobal = state.chatMode === "global";
-  el.roomChatTab.classList.toggle("active", !isGlobal);
+  el.roomChatTab.classList.toggle("active", !isGlobal && !matchChat);
   el.globalChatTab.classList.toggle("active", isGlobal);
-  el.roomChatTab.setAttribute("aria-selected", String(!isGlobal));
+  el.roomChatTab.setAttribute("aria-selected", String(!isGlobal && !matchChat));
   el.globalChatTab.setAttribute("aria-selected", String(isGlobal));
   el.globalUnreadBadge.classList.toggle("hidden", state.globalUnreadCount === 0 || isGlobal);
   el.globalUnreadBadge.textContent = state.globalUnreadCount > 9 ? "9+" : String(state.globalUnreadCount);
@@ -3786,24 +3864,34 @@ function renderChat() {
   el.globalChatGate.classList.toggle("hidden", !showGate);
   el.globalQuickMessages.classList.toggle("hidden", !isGlobal || !state.globalChatSubscribed);
   el.chatComposer.classList.toggle("hidden", showGate);
-  el.roomLogBox.classList.toggle("hidden", isGlobal);
+  el.roomLogBox.classList.toggle("hidden", isGlobal || matchChat);
   el.globalLogBox.classList.toggle("hidden", !isGlobal || !state.globalChatSubscribed);
 
   el.enableGlobalChatBtn.disabled = !state.connected || !state.roomJoined || state.globalChatJoining;
   el.enableGlobalChatBtn.textContent = state.globalChatJoining
     ? "接続しています…"
     : "注意事項を確認して表示する";
-  el.chatInput.placeholder = isGlobal
+  const matchCanSend = state.roomState === "playing" && !!state.tournamentOwnMatch?.match_id;
+  el.chatInput.placeholder = matchChat
+    ? matchCanSend ? "対戦相手へのメッセージ" : "対戦終了後は履歴を閲覧できます"
+    : isGlobal
     ? `${CONFIG.productName}全体へのメッセージ`
     : state.roomJoined && isTournamentRoom()
       ? "大会ロビーへのメッセージ"
       : "部屋へのメッセージ";
-  el.chatBtn.disabled = isGlobal && !state.globalChatSubscribed;
+  el.chatInput.disabled = matchChat && !matchCanSend;
+  el.chatBtn.disabled = (isGlobal && !state.globalChatSubscribed) || (matchChat && !matchCanSend);
 }
 
 function sendChat() {
   const message = el.chatInput.value.trim();
   if (!message) return;
+  if (state.chatMode === "match" && isTournamentRoom()) {
+    if (state.roomState !== "playing" || !state.tournamentOwnMatch?.match_id) return;
+    send({ type: "tournament_match_chat", match_id: state.tournamentOwnMatch.match_id, message });
+    el.chatInput.value = "";
+    return;
+  }
   const type = state.chatMode === "global"
     ? "global_chat"
     : state.roomJoined && isTournamentRoom()
@@ -3859,11 +3947,17 @@ function log(sender, message, target = el.roomLogBox, action = null) {
     link.textContent = "Xで共有";
     line.append(document.createTextNode(" "), link);
   }
-  target.prepend(line);
+  if (target === el.tournamentMatchLogBox) {
+    target.appendChild(line);
+    target.scrollTop = target.scrollHeight;
+  } else {
+    target.prepend(line);
+  }
 }
 
 function logTournamentMatch(sender, message, action = null) {
   log(sender, message, el.tournamentMatchLogBox || el.roomLogBox, action);
+  if (state.chatMode !== "match") state.tournamentMatchUnreadCount += 1;
 }
 
 function logGlobalSystem(message) {
@@ -3919,7 +4013,12 @@ function logScoreRecord(lines, target = el.roomLogBox) {
   pre.textContent = lines.join("\n");
   entry.appendChild(pre);
 
-  target.prepend(entry);
+  if (target === el.tournamentMatchLogBox) {
+    target.appendChild(entry);
+    if (state.chatMode !== "match") state.tournamentMatchUnreadCount += 1;
+  } else {
+    target.prepend(entry);
+  }
 }
 
 async function copyKifuText(text, status) {
