@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>素数大富豪＋ 大会管理</title>
-    <link rel="stylesheet" href="./tournament-admin.css?v=20260803-1" />
+    <link rel="stylesheet" href="./tournament-admin.css?v=flexible-20260923" />
   </head>
   <body>
     <main class="admin-shell">
@@ -23,6 +23,7 @@
           <label>管理トークン<input id="adminToken" type="password" autocomplete="current-password" required /></label>
           <label>大会名<input id="title" value="素数大富豪＋ 定期大会" maxlength="80" required /></label>
           <label>フォーマットID<input id="formatKey" value="plus-round-robin-v1" maxlength="64" required /></label>
+          <label>対戦方式<select id="pairingMode"><option value="rounds">ラウンド固定・総当たり</option><option value="flexible">随時対戦・途中参加あり・総当たり</option></select></label>
           <label>ルール
             <select id="ruleKey">
               <option value="std-5-1">5枚 / ペナルティ1枚</option>
@@ -45,6 +46,8 @@
           </label>
           <label>参加登録開始<input id="registrationOpensAt" type="datetime-local" required /></label>
           <label>大会開始<input id="startsAt" type="datetime-local" required /></label>
+          <label id="registrationClosesLabel" hidden>途中参加の受付終了<input id="registrationClosesAt" type="datetime-local" /></label>
+          <p id="flexiblePolicy" class="note" hidden>随時対戦は再戦なし・双方確認で開始。参加確認は60秒。不在・確認無反応による受付停止が5分続くと棄権し、残りは不戦敗になります。対戦中の切断猶予は1分。受付終了後、全組み合わせの結果確定で終了します。</p>
           <label>参加上限<input id="maxParticipants" type="number" min="2" max="10" value="10" required /></label>
           <button type="submit" class="primary">この日程で設定</button>
           <p class="note">山札通常・ペナルティ通常・合成数ありは標準設定のため、ルール名では省略します。</p>
@@ -75,6 +78,6 @@
 
       <section id="messageLog" class="message-log" aria-live="polite"></section>
     </main>
-    <script src="./tournament-admin.js?v=20260803-1"></script>
+    <script src="./tournament-admin.js?v=flexible-20260923"></script>
   </body>
 </html>

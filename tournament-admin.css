@@ -1,5 +1,6 @@
 :root { color-scheme: light; font-family: system-ui, sans-serif; background: #eef4fb; color: #172033; }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; }
 button, input, select { font: inherit; }
 .admin-shell { width: min(1180px, calc(100% - 32px)); margin: 28px auto 56px; display: grid; gap: 20px; }
@@ -23,7 +24,7 @@ button.primary { border-color: #2468b3; background: #2468b3; color: #fff; font-w
 .match-row header { align-items: flex-start; }
 .match-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
 .match-actions button { font-size: .8rem; }
-.standings { display: grid; gap: 6px; }
+.standings { display: grid; gap: 6px; list-style: none; padding-left: 0; }
 .message-log { min-height: 46px; padding: 12px 16px; border-radius: 12px; background: #172033; color: #fff; }
 .message-log.error { background: #7f1d1d; }
 @media (max-width: 820px) { .admin-grid { grid-template-columns: 1fr; } header { align-items: flex-start; flex-direction: column; } }

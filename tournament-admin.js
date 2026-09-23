@@ -4,12 +4,18 @@ const el = Object.fromEntries([
   "connectionStatus", "scheduleForm", "adminToken", "title", "formatKey", "ruleKey",
   "registrationOpensAt", "startsAt", "maxParticipants", "refreshBtn", "historyBtn",
   "runSummary", "currentMatch", "matchList", "standings", "historyList", "messageLog",
+  "pairingMode", "registrationClosesAt", "registrationClosesLabel", "flexiblePolicy",
 ].map((id) => [id, document.getElementById(id)]));
 let ws;
 let tournament = null;
 
 setDefaultDates();
 connect();
+el.pairingMode.addEventListener("change", () => {
+  const flexible = el.pairingMode.value === "flexible";
+  el.registrationClosesLabel.hidden = el.flexiblePolicy.hidden = !flexible;
+  el.registrationClosesAt.required = flexible;
+});
 
 el.scheduleForm.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -23,6 +29,8 @@ el.scheduleForm.addEventListener("submit", (event) => {
     registration_opens_at: new Date(el.registrationOpensAt.value).toISOString(),
     starts_at: new Date(el.startsAt.value).toISOString(),
     max_participants: Number(el.maxParticipants.value),
+    pairing_mode: el.pairingMode.value,
+    ...(el.pairingMode.value === "flexible" ? {registration_closes_at: new Date(el.registrationClosesAt.value).toISOString()} : {}),
   });
 });
 el.refreshBtn.addEventListener("click", () => send({ type: "get_tournament_status" }));
@@ -87,10 +95,11 @@ function renderTournament() {
   }
   el.runSummary.className = "run-summary";
   el.runSummary.textContent = `${tournament.title} / ${tournament.rule?.summary || tournament.rule_key} / ${statusLabel(tournament.status)} / ${formatDate(tournament.starts_at)}開始 / ${tournament.participant_count}人`;
+  if (tournament.pairing_mode === "flexible") el.runSummary.textContent += ` / 随時対戦 / 途中参加は${formatDate(tournament.registration_closes_at)}まで`;
   const activeMatches = tournament.active_matches || (tournament.current_match ? [tournament.current_match] : []);
   el.currentMatch.className = activeMatches.length ? "current-match active" : "current-match empty";
   el.currentMatch.textContent = activeMatches.length
-    ? `進行中 ${activeMatches.length}試合: ${activeMatches.map((match) => `R${match.round_no} ${match.player1_name} vs ${match.player2_name}（${statusLabel(match.status)}）`).join(" / ")}`
+    ? `進行中 ${activeMatches.length}試合: ${activeMatches.map((match) => `${matchLabel(match)} ${match.player1_name} vs ${match.player2_name}（${statusLabel(match.status)}）`).join(" / ")}`
     : "進行中の対戦はありません。";
 
   el.matchList.replaceChildren(...(tournament.matches || []).map((match) => {
@@ -98,7 +107,7 @@ function renderTournament() {
     row.className = "match-row";
     const heading = document.createElement("header");
     const title = document.createElement("strong");
-    title.textContent = `R${match.round_no} #${match.sequence_no} ${match.player1_name} vs ${match.player2_name}`;
+    title.textContent = `${matchLabel(match)} ${match.player1_name} vs ${match.player2_name}`;
     const status = document.createElement("span");
     status.textContent = match.winner_name ? `${match.winner_name} 勝利` : statusLabel(match.status);
     heading.append(title, status);
@@ -115,7 +124,8 @@ function renderTournament() {
 
   el.standings.replaceChildren(...(tournament.standings || []).map((row) => {
     const item = document.createElement("li");
-    item.textContent = `${row.rank}位 ${row.display_name}: ${row.wins}勝${row.losses}敗 / ${row.points}点`;
+    const retired = tournament.participants?.find(p => p.participant_id === row.participant_id)?.retired_at;
+    item.textContent = `${row.rank}位 ${row.display_name}${retired ? "（棄権）" : ""}: ${row.wins}勝${row.losses}敗`;
     return item;
   }));
 }
@@ -128,6 +138,10 @@ function actionButton(label, action, match, winnerId = "") {
   button.dataset.matchId = match.match_id;
   if (winnerId) button.dataset.winnerId = winnerId;
   return button;
+}
+
+function matchLabel(match) {
+  return tournament?.pairing_mode === "flexible" ? `対戦 #${match.sequence_no}` : `R${match.round_no} #${match.sequence_no}`;
 }
 
 function renderHistory(runs) {
@@ -175,6 +189,7 @@ function setDefaultDates() {
   const starts = new Date(now.getTime() + 35 * 60 * 1000);
   el.registrationOpensAt.value = localDateTimeValue(opens);
   el.startsAt.value = localDateTimeValue(starts);
+  el.registrationClosesAt.value = localDateTimeValue(new Date(starts.getTime() + 60 * 60 * 1000));
 }
 
 function localDateTimeValue(date) {

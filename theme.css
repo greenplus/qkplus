@@ -205,7 +205,8 @@ body[data-mode="playing"] .tournament-unified .tournament-details {
   display: grid;
   gap: 6px;
   margin: 0;
-  padding-left: 1.6rem;
+  padding-left: 0;
+  list-style: none;
 }
 
 .tournament-standings li {

@@ -81,7 +81,7 @@ const state = {
   recruitmentSubmitPending: false,
   recruitmentOwnerTokens: { main: "", guest: "" },
   playingDisconnectGraceSeconds: 60,
-  waitingDisconnectGraceSeconds: 180,
+  waitingDisconnectGraceSeconds: 60,
   roomRules: {},
   roomCpuProfiles: {},
   roomHnpChallengeEnabled: {},
@@ -484,6 +484,10 @@ function bindElements() {
     "gameColumn",
     "tournamentMatchLogBox",
     "tournamentDetails",
+    "tournamentAvailability",
+    "tournamentAvailabilityText",
+    "tournamentResumeBtn",
+    "tournamentRetireBtn",
     "tournamentStageControls",
     "tournamentSpectatorHeading",
     "tournamentShowMatchesBtn",
@@ -595,6 +599,10 @@ function bindEvents() {
   el.campaignDialogCloseBtn.addEventListener("click", closeCampaignResult);
   if (el.tournamentRegisterBtn) el.tournamentRegisterBtn.addEventListener("click", registerForTournament);
   if (el.tournamentWithdrawBtn) el.tournamentWithdrawBtn.addEventListener("click", withdrawFromTournament);
+  el.tournamentResumeBtn?.addEventListener("click", () => send({type: "tournament_resume_accepting"}));
+  el.tournamentRetireBtn?.addEventListener("click", () => {
+    if (window.confirm("大会を棄権すると、残りの対戦が不戦敗となり、この開催回は観戦のみになります。棄権しますか？")) send({type: "tournament_retire"});
+  });
   el.tournamentChatTab?.addEventListener("click", () => switchChatMode("match"));
   el.tournamentShowMatchesBtn?.addEventListener("click", showTournamentMatchList);
   el.tournamentShowFinishedBtn?.addEventListener("click", () => {
@@ -1107,12 +1115,12 @@ function handleMessage(msg) {
     case "tournament_match_started":
       setTournamentState(msg.tournament || state.tournament);
       state.tournamentView = "own";
-      state.tournamentOwnMatch = ownTournamentMatch() || { match_id: msg.match_id, round_no: msg.round_no };
+      state.tournamentOwnMatch = ownTournamentMatch() || { match_id: msg.match_id, round_no: msg.round_no, sequence_no: msg.sequence_no };
       state.tournamentFinishedMatch = null;
       el.tournamentFinishedBoard?.replaceChildren();
       state.tournamentObservedMatchId = null;
       state.tournamentObservedMatch = null;
-      logTournamentMatch("system", `第${msg.round_no}ラウンド ${state.tournamentOwnMatch.player1_name || ""} vs ${state.tournamentOwnMatch.player2_name || ""} の対戦を開始しました。`);
+      logTournamentMatch("system", `${tournamentMatchLabel(state.tournamentOwnMatch)} ${state.tournamentOwnMatch.player1_name || ""} vs ${state.tournamentOwnMatch.player2_name || ""} の対戦を開始しました。`);
       break;
     case "tournament_return_to_lobby":
       setTournamentState(msg.tournament || state.tournament);
@@ -1317,8 +1325,10 @@ function handleMessage(msg) {
 }
 
 function setTournamentState(tournament) {
+  syncServerClock(tournament?.server_now);
   if (tournament?.run_id && state.tournamentChatRunId !== tournament.run_id) {
     state.tournamentChatRunId = tournament.run_id;
+    state.tournamentParticipantId = tournament.viewer_participant_id || null;
     state.tournamentView = "list";
     state.tournamentOwnMatch = null;
     state.tournamentFinishedMatch = null;
@@ -1757,7 +1767,7 @@ function leaveRoom() {
     && ["called", "playing"].includes(pairing.status)
   );
   const activePlayerLeaving = state.roomState === "playing" && state.isWaiting;
-  if (activePlayerLeaving || assignedTournamentMatch) {
+  if (activePlayerLeaving || (assignedTournamentMatch && state.tournament?.pairing_mode !== "flexible")) {
     const message = activePlayerLeaving
       ? "対戦中に退室すると負けになります。それでも退室しますか？"
       : "対戦の呼び出し中に退室すると不戦敗になります。それでも退室しますか？";
@@ -2580,20 +2590,24 @@ function renderTournament() {
     el.tournamentSchedule.textContent = "次回日程は未設定です。";
     el.tournamentMessage.textContent = "管理者が日程とルールを設定すると、ここで参加登録できます。";
   } else {
-    el.tournamentSchedule.textContent = `受付 ${formatTournamentDate(tournament.registration_opens_at)} / 開始 ${formatTournamentDate(tournament.starts_at)}`;
+    el.tournamentSchedule.textContent = `受付 ${formatTournamentDate(tournament.registration_opens_at)} / 開始 ${formatTournamentDate(tournament.starts_at)}`
+      + (tournament.pairing_mode === "flexible" ? ` / 途中参加は${formatTournamentDate(tournament.registration_closes_at)}まで` : "");
     el.tournamentMessage.textContent = tournament.status === "registration"
       ? `${tournament.participant_count}/${tournament.max_participants}人が登録済みです。`
       : tournament.status === "scheduled"
         ? "受付開始時刻になると参加登録ボタンが有効になります。"
         : tournament.status === "running"
-          ? "対戦はシステムが順番に割り振り、自動で開始します。"
+          ? tournament.pairing_mode === "flexible" ? "空いている参加者の未対戦カードを随時呼び出します。双方の確認で開始します。受付終了後、全組み合わせの結果確定で終了します。" : "対戦はシステムが順番に割り振り、自動で開始します。"
           : tournament.status === "finished"
             ? "全試合の最終結果です。"
             : "この開催回は中止になりました。";
   }
 
   const registered = Boolean(state.tournamentParticipantId || tournament?.registered);
-  el.tournamentRegisterBtn.disabled = state.guestMode || !tournament || tournament.status !== "registration" || registered;
+  const registrationOpen = tournament?.pairing_mode === "flexible"
+    ? ["registration", "running"].includes(tournament.status) && Date.now() + state.serverOffsetMs < Date.parse(tournament.registration_closes_at)
+    : tournament?.status === "registration";
+  el.tournamentRegisterBtn.disabled = state.guestMode || !registrationOpen || registered;
   el.tournamentRegisterBtn.textContent = state.guestMode
     ? "ゲストは観戦のみ"
     : registered
@@ -2610,7 +2624,7 @@ function renderTournament() {
     const player2Ready = (pairing.ready_player_ids || []).includes(pairing.player2_id);
     el.tournamentPairing.replaceChildren();
     const label = document.createElement("strong");
-    label.textContent = `第${pairing.round_no}ラウンド`;
+    label.textContent = tournamentMatchLabel(pairing);
     const names = document.createElement("span");
     names.textContent = pairing.status === "called"
       ? `${pairing.player1_name}${player1Ready ? " ✓" : ""} vs ${pairing.player2_name}${player2Ready ? " ✓" : ""}`
@@ -2633,7 +2647,8 @@ function renderTournament() {
   el.tournamentStandings.replaceChildren();
   (tournament?.standings || []).forEach((row) => {
     const item = document.createElement("li");
-    item.textContent = `${row.rank}位 ${row.display_name} — ${row.wins}勝${row.losses}敗 / ${row.points}点`;
+    const retired = tournament?.participants?.find(p => p.participant_id === row.participant_id)?.retired_at;
+    item.textContent = `${row.rank}位 ${row.display_name}${retired ? "（棄権）" : ""} — ${row.wins}勝${row.losses}敗`;
     if (row.participant_id === state.tournamentParticipantId) item.classList.add("self");
     el.tournamentStandings.appendChild(item);
   });
@@ -2647,9 +2662,36 @@ function renderTournament() {
     const readySeconds = tournament?.match_ready_seconds ?? 60;
     const turnSeconds = tournament?.turn_time_limit_seconds ?? 60;
     const playingSeconds = tournament?.playing_disconnect_grace_seconds ?? 60;
-    const waitingSeconds = tournament?.waiting_disconnect_grace_seconds ?? 180;
-    el.tournamentTimingNote.textContent = `対局は1手${turnSeconds}秒で、時間切れは自動パスです。対戦呼び出しは両者確認で即開始、未確認でも両者接続中なら${readySeconds}秒後に自動開始します。切断復帰猶予は対戦中${formatDuration(playingSeconds)}、ロビー待機中${formatDuration(waitingSeconds)}です。復帰トークンはこのブラウザだけに保存します。`;
+    const waitingSeconds = tournament?.waiting_disconnect_grace_seconds ?? 60;
+    const callPolicy = tournament?.pairing_mode === "flexible"
+      ? `参加確認は${readySeconds}秒以内です。未確認なら呼び出しを解除し、受付を停止します。不在または無反応による受付停止から5分で棄権が確定します。復帰後は「対戦受付を再開」を押してください。棄権後は観戦のみです。再戦はありません。`
+      : `対戦呼び出しは両者確認で即開始、未確認でも両者接続中なら${readySeconds}秒後に自動開始します。`;
+    el.tournamentTimingNote.textContent = `対局は1手${turnSeconds}秒で、時間切れは自動パスです。${callPolicy} 切断した席の保持は対戦中${formatDuration(playingSeconds)}、ロビー待機中${formatDuration(waitingSeconds)}です。順位は勝ち数で決め、同勝数は同順位です。`;
   }
+  renderTournamentAvailability();
+}
+
+function tournamentMatchLabel(match) {
+  return state.tournament?.pairing_mode === "flexible" || match?.round_no === 0
+    ? `対戦 #${match?.sequence_no || "-"}` : `第${match?.round_no || "-"}ラウンド`;
+}
+
+function renderTournamentAvailability() {
+  if (!el.tournamentAvailability) return;
+  const participant = state.tournament?.participants?.find(p => p.participant_id === state.tournamentParticipantId);
+  const visible = state.roomJoined && isTournamentRoom() && state.tournament?.pairing_mode === "flexible" && !!participant;
+  el.tournamentAvailability.classList.toggle("hidden", !visible);
+  if (!visible) return;
+  const running = state.tournament.status === "running";
+  const paused = !!participant.unavailable_since && !participant.retired_at && running;
+  const seconds = Math.max(0, Math.ceil((Date.parse(participant.retirement_deadline_at) - Date.now() - state.serverOffsetMs) / 1000));
+  el.tournamentAvailabilityText.textContent = participant.retired_at ? "棄権確定。この開催回は観戦のみ可能です。"
+    : paused ? `対戦受付を停止しています。棄権まで残り${seconds}秒（猶予5分）。「対戦受付を再開」を押してください。`
+    : running ? "対戦受付中。未対戦の相手が空くと呼び出します。退出・切断による不在が5分続くと棄権になります。"
+    : state.tournament.status === "finished" ? "大会終了。最終順位を大会情報から確認できます。" : "参加登録済みです。";
+  el.tournamentResumeBtn.classList.toggle("hidden", !paused);
+  el.tournamentResumeBtn.disabled = !state.connected || seconds <= 0;
+  el.tournamentRetireBtn.classList.toggle("hidden", !running || !!participant.retired_at);
 }
 
 function renderTournamentWorkspace() {
@@ -2660,6 +2702,7 @@ function renderTournamentWorkspace() {
   el.logColumn?.classList.remove("hidden");
   el.tournamentDetails.classList.toggle("hidden", !visible);
   if (!visible) {
+    el.tournamentAvailability?.classList.add("hidden");
     el.gameColumn?.classList.remove("hidden");
     el.tournamentSpectatorPanel?.classList.add("hidden");
     el.tournamentFinishedPanel?.classList.add("hidden");
@@ -2683,7 +2726,7 @@ function renderTournamentWorkspace() {
   renderTournamentSpectator(activeMatches);
   const shownMatch = ownVisible ? state.tournamentOwnMatch
     : finishedVisible ? state.tournamentFinishedMatch : watching ? state.tournamentObservedMatch : null;
-  const place = shownMatch ? `第${shownMatch.round_no || "-"}ラウンド${shownMatch.table_no ? `・第${shownMatch.table_no}卓` : ""}` : "";
+  const place = shownMatch ? tournamentMatchLabel(shownMatch) + (state.tournament?.pairing_mode !== "flexible" && shownMatch.table_no ? `・第${shownMatch.table_no}卓` : "") : "";
   el.roomHeading.textContent = ownVisible ? `大会 対戦場所 · ${place}`
     : finishedVisible ? `大会 対戦終了 · ${place}`
     : watching ? `大会 観戦場所 · ${place}` : "大会ロビー";
@@ -2691,6 +2734,11 @@ function renderTournamentWorkspace() {
   el.playStatus.textContent = ownVisible ? "対戦中" : finishedVisible ? "対戦終了"
     : watching ? (["completed", "skipped"].includes(shownMatch.status) ? "観戦終了" : "観戦中")
     : ownTournamentMatch()?.status === "called" ? "呼び出し中" : "大会待機中";
+  if (!shownMatch && state.tournament?.pairing_mode === "flexible") {
+    const participant = state.tournament.participants?.find(p => p.participant_id === state.tournamentParticipantId);
+    if (participant?.retired_at) el.playStatus.textContent = "棄権";
+    else if (participant?.unavailable_since) el.playStatus.textContent = "受付停止";
+  }
   if (shownMatch) {
     el.playerList.textContent = [shownMatch.player1_name, shownMatch.player2_name].filter(Boolean).join("、") || el.playerList.textContent;
     el.watcherList.textContent = `${shownMatch.viewer_count || 0}人`;
@@ -2715,7 +2763,7 @@ function renderTournamentSpectator(activeMatches) {
     button.classList.toggle("active", state.tournamentObservedMatchId === match.match_id);
 
     const round = document.createElement("small");
-    round.textContent = `第${match.round_no}ラウンド・第${match.table_no || "-"}卓`;
+    round.textContent = tournamentMatchLabel(match) + (state.tournament?.pairing_mode !== "flexible" && match.table_no ? `・第${match.table_no}卓` : "");
     const names = document.createElement("strong");
     names.textContent = `${match.player1_name} vs ${match.player2_name}`;
     const status = document.createElement("span");
@@ -2746,6 +2794,7 @@ function renderTournamentSpectator(activeMatches) {
   }
 
   const statusLabels = {
+    pending: "呼び出し解除",
     called: "呼び出し中",
     playing: "対戦中",
     completed: "終了",
@@ -2753,7 +2802,7 @@ function renderTournamentSpectator(activeMatches) {
   };
   el.tournamentSpectatorStatus.textContent = statusLabels[selected.status] || selected.status || "待機中";
   el.tournamentSpectatorStatus.dataset.status = selected.status || "unavailable";
-  el.tournamentSpectatorTitle.textContent = `第${selected.round_no}ラウンド ${selected.player1_name} vs ${selected.player2_name}`;
+  el.tournamentSpectatorTitle.textContent = `${tournamentMatchLabel(selected)} ${selected.player1_name} vs ${selected.player2_name}`;
   el.tournamentSpectatorTurn.textContent = selected.winner_name
     ? `勝者 ${selected.winner_name}`
     : selected.current_turn
@@ -2811,6 +2860,9 @@ function tournamentPairingNote(pairing, isViewerMatch, viewerReady) {
   if (pairing.status === "playing") return isViewerMatch ? "対戦中です" : "現在の対戦";
   if (pairing.status !== "called") return isViewerMatch ? "あなたの対戦です" : "現在の対戦";
   const remaining = tournamentReadySecondsRemaining(pairing);
+  if (state.tournament?.pairing_mode === "flexible") return viewerReady
+    ? `参加確認済み・相手を待っています（確認期限まで${remaining}秒）`
+    : `参加確認を押してください（確認期限まで${remaining}秒・未確認なら呼び出し解除）`;
   if (isViewerMatch && viewerReady) return `参加確認済み・相手を待っています（自動開始まで${remaining}秒）`;
   if (isViewerMatch) return `あなたの対戦です（自動開始まで${remaining}秒）`;
   return `対戦者を呼び出し中（自動開始まで${remaining}秒）`;
@@ -2823,6 +2875,8 @@ function tournamentReadySecondsRemaining(pairing) {
 
 function renderTournamentCallCountdown() {
   if (!state.roomJoined || !isTournamentRoom()) return;
+  renderTournamentAvailability();
+  if (state.tournament?.pairing_mode === "flexible" && el.tournamentRegisterBtn && Date.now() + state.serverOffsetMs >= Date.parse(state.tournament.registration_closes_at)) el.tournamentRegisterBtn.disabled = true;
   const pairing = ownTournamentMatch();
   const note = el.tournamentPairing?.querySelector("[data-tournament-countdown]");
   if (!pairing || !note) return;
@@ -3173,7 +3227,7 @@ function renderNextHint() {
           ? "参加登録済みです。開始時刻になるとシステムが組合せと対戦を進行します。"
           : "「大会情報・参加・順位」を開き、「大会に参加登録」を押してください。"
         : state.tournament?.status === "running"
-          ? "大会進行中です。対戦者に選ばれると自動でゲームが始まります。"
+          ? state.tournament?.pairing_mode === "flexible" ? "大会進行中です。呼び出されたら参加確認を押してください。大会情報から途中参加の受付期限と順位を確認できます。" : "大会進行中です。対戦者に選ばれると自動でゲームが始まります。"
           : state.tournament?.status === "finished"
             ? "大会が終了しました。「大会情報・参加・順位」から最終結果を確認できます。"
             : "次回大会の日程と受付開始をお待ちください。";
