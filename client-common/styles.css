@@ -70,8 +70,50 @@ button:disabled {
 
 .top-band {
   display: grid;
-  gap: 18px;
+  gap: 10px;
   padding: 24px 4px 18px;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.top-band > .lead {
+  margin-top: 0;
+}
+
+.connection-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.connection-status .dot {
+  width: 8px;
+  height: 8px;
+}
+
+.connection-status.is-error,
+.connection-detail,
+.action-error {
+  color: var(--red);
+}
+
+.connection-detail,
+.action-error {
+  font-size: 0.84rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.action-error {
+  margin-top: 8px;
 }
 
 body[data-mode="room"] .top-band,
@@ -219,31 +261,47 @@ textarea,
 }
 
 .guest-mode-option {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin-top: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface, #fff) 90%, var(--accent, #4b6cb7) 10%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  color: var(--muted);
+  font-size: 0.82rem;
   cursor: pointer;
 }
 
 .guest-mode-option input {
-  width: 18px;
-  height: 18px;
-  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+  margin: 0;
 }
 
-.guest-mode-option span {
-  display: grid;
-  gap: 2px;
+.identity-options {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 6px;
 }
 
-.guest-mode-option small {
+.secondary-details > summary {
+  width: fit-content;
+  padding-block: 5px;
   color: var(--muted);
-  line-height: 1.45;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.secondary-details > .microcopy {
+  margin-top: 4px;
+}
+
+.identity-help[open] {
+  flex-basis: 100%;
+}
+
+.reconnect-details {
+  margin-top: 8px;
 }
 
 .guest-mode-option:has(input:disabled) {
@@ -386,6 +444,20 @@ textarea,
 .recruitment-panel {
   display: grid;
   gap: 14px;
+}
+
+.recruitment-compose > summary {
+  color: var(--accent-dark);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.recruitment-compose > .recruitment-intro {
+  margin-top: 8px;
+}
+
+.recruitment-compose > .recruitment-status {
+  margin-top: 10px;
 }
 
 .recruitment-heading {
@@ -542,6 +614,14 @@ textarea,
   color: var(--ink);
   text-align: center;
   transition: border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.room-slot-card.compact {
+  min-height: 88px;
+}
+
+.room-slot-card.compact .room-slot-summary {
+  min-height: 0;
 }
 
 .room-slot-rule {

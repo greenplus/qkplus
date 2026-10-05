@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>合成数大富豪 練習部屋</title>
-    <link rel="stylesheet" href="../client-common/styles.css?v=shared-f40b892128a5" />
+    <link rel="stylesheet" href="../client-common/styles.css?v=shared-85c25e7a007e" />
     <link rel="stylesheet" href="../theme.css?v=plus-20260805-2" />
     <link rel="stylesheet" href="./practice.css?v=practice-20260805-1" />
   </head>
@@ -22,19 +22,17 @@
     </section>
     <main class="app-shell">
       <section id="topBand" class="top-band">
-        <div>
+        <div class="title-row">
           <h1>合成数大富豪 練習部屋</h1>
-          <p class="lead">
-            合成数出しだけで分け切りを練習する、非公開の専用ページです。
-          </p>
-        </div>
-        <div class="connection-card">
-          <span id="connectionDot" class="dot"></span>
-          <div>
+          <div id="connectionStatus" class="connection-status" role="status">
+            <span id="connectionDot" class="dot"></span>
             <strong id="connectionLabel">接続準備中</strong>
-            <p id="serverLabel">既存サーバーに接続します</p>
           </div>
         </div>
+        <p class="lead">
+            合成数出しだけで分け切りを練習する、非公開の専用ページです。
+          </p>
+        <p id="serverLabel" class="connection-detail hidden"></p>
       </section>
 
       <section id="setupPanel" class="setup-grid">
@@ -45,13 +43,16 @@
             <input id="nameInput" maxlength="24" autocomplete="nickname" placeholder="例: マグロ" />
             <button id="randomNameBtn" class="ghost-button" type="button">おまかせ</button>
           </div>
-          <label class="guest-mode-option" for="guestModeToggle">
-            <input id="guestModeToggle" type="checkbox" />
-            <span>
-              <strong>このタブだけゲストとして使う</strong>
-              <small id="identityModeNote">保存済みの名前と大会参加情報を使います。</small>
-            </span>
-          </label>
+          <div class="identity-options">
+            <label class="guest-mode-option" for="guestModeToggle">
+              <input id="guestModeToggle" type="checkbox" />
+              <span>このタブだけゲスト</span>
+            </label>
+            <details class="identity-help secondary-details">
+              <summary>ゲストとは</summary>
+              <p id="identityModeNote" class="microcopy">保存済みの名前と大会参加情報を使います。</p>
+            </details>
+          </div>
           <div class="room-group-choice" role="group" aria-label="ルールカテゴリ選択">
             <button id="roomGroupPrimaryBtn" class="room-group-choice-card active" type="button" aria-pressed="true">
               <span>Practice</span>
@@ -91,12 +92,14 @@
             </div>
             <span id="recruitmentCount" class="recruitment-count">0 / 5件</span>
           </div>
-          <p class="recruitment-intro">
-            集まりたい時間と希望ルールを掲示できます。集合時間になると自動で消えます。
-          </p>
           <div id="recruitmentList" class="recruitment-list" aria-live="polite">
             <p class="recruitment-empty">募集を読み込んでいます…</p>
           </div>
+          <details class="recruitment-compose secondary-details">
+            <summary>募集する</summary>
+          <p class="recruitment-intro">
+            集まりたい時間と希望ルールを掲示できます。集合時間になると自動で消えます。
+          </p>
           <form id="recruitmentForm" class="recruitment-form">
             <label>
               <span>集合時間</span>
@@ -121,9 +124,9 @@
             </label>
             <button id="recruitmentSubmitBtn" class="primary-button" type="submit">募集を投稿</button>
           </form>
-          <p id="recruitmentStatus" class="recruitment-status" aria-live="polite">
-            Plus掲示板は全体5件・1ユーザー1件まで。自分の投稿だけ削除できます。
-          </p>
+            <p class="recruitment-status">Plus掲示板は全体5件・1ユーザー1件まで。自分の投稿だけ削除できます。</p>
+          </details>
+          <p id="recruitmentStatus" class="recruitment-status hidden" aria-live="polite"></p>
         </div>
 
         <div class="panel guide-panel">
@@ -192,7 +195,11 @@
               <button id="addCpuBtn" class="ghost-button" type="button">CPU追加</button>
               <button id="startBtn" class="primary-button" type="button">開始</button>
             </div>
-            <p id="reconnectPolicyNote" class="microcopy">切断復帰猶予を読み込み中です。</p>
+            <p id="roomConnectionStatus" class="connection-detail hidden" role="status"></p>
+            <details class="reconnect-details secondary-details">
+              <summary>切断・復帰について</summary>
+              <p id="reconnectPolicyNote" class="microcopy">切断復帰猶予を読み込み中です。</p>
+            </details>
             <div id="cpuChooser" class="cpu-chooser hidden">
               <div class="cpu-chooser-heading">
                 <label for="cpuProfileSelect">対戦するCPU</label>
@@ -271,12 +278,15 @@
               <strong id="turnClockValue">--</strong>
             </div>
             <div id="fieldZone" class="field-zone">
-              <h2 class="game-section-title">場：<span id="fieldNumber">なし</span></h2>
+              <div class="panel-heading-row">
+                <h2 class="game-section-title">場：<span id="fieldNumber">なし</span></h2>
+                <span id="spectatorTurn" class="turn-badge spectating hidden" role="status"></span>
+              </div>
               <div id="fieldCards" class="field-cards empty">まだ何も出ていません</div>
             </div>
           </div>
 
-          <div class="play-area">
+          <div id="playArea" class="play-area">
             <section class="hand-panel">
               <div class="panel-heading-row">
                 <h2 class="game-section-title">手札</h2>
@@ -295,6 +305,7 @@
               </div>
               <div id="selectedCards" class="card-row empty-row">未選択</div>
               <div id="jokerControls" class="joker-controls"></div>
+              <p id="actionError" class="action-error hidden" role="alert"></p>
               <div class="button-row action-row">
                 <button id="playBtn" class="primary-button" type="button">出す</button>
                 <button id="compositeModeBtn" class="secondary-button" type="button">合成数出し</button>
@@ -400,6 +411,6 @@
     </dialog>
 
     <script src="./product-config.js?v=practice-20260805-1"></script>
-    <script src="../client-common/app.js?v=shared-f40b892128a5"></script>
+    <script src="../client-common/app.js?v=shared-85c25e7a007e"></script>
   </body>
 </html>

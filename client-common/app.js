@@ -328,13 +328,15 @@ function updateIdentityModeUi() {
   if (!el.identityModeNote) return;
   el.identityModeNote.textContent = state.guestMode
     ? "このタブ専用の名前を使います。保存済みの名前・復帰情報・大会参加権は使用しません。"
-    : "保存済みの名前を使います。対戦の復帰情報はタブごとに分かれます。";
+    : "通常は保存済みの名前を使います。ゲストをオンにすると、このタブ専用の名前になり、保存済みの復帰情報・大会参加権は使いません。";
 }
 
 function bindElements() {
   [
     "connectionDot",
     "connectionLabel",
+    "connectionStatus",
+    "roomConnectionStatus",
     "serverLabel",
     "setupPanel",
     "roomPanel",
@@ -403,6 +405,9 @@ function bindElements() {
     "saveCustomizationToggle",
     "saveCustomizationNote",
     "fieldZone",
+    "spectatorTurn",
+    "playArea",
+    "actionError",
     "fieldNumber",
     "fieldCards",
     "deckCount",
@@ -1224,6 +1229,7 @@ function handleMessage(msg) {
       break;
     case "turn_update":
     case "next_turn":
+      setActionError("");
       state.currentTurn = msg.current_turn || "";
       syncTurnClock(msg);
       scheduleAssist();
@@ -1301,6 +1307,10 @@ function handleMessage(msg) {
     case "error":
       const failedRegistrationRequest = state.pendingRegistrationRequest;
       state.pendingRegistrationRequest = null;
+      if (state.roomState === "playing" && state.isWaiting
+          && !failedRegistrationRequest && !String(msg.code || "").includes("chat")) {
+        setActionError(msg.message || "操作を受け付けられませんでした。");
+      }
       if (msg.code === "registered_number_limit") {
         el.registerStatus.textContent = msg.message || "登録数が上限を超えています";
       }
@@ -1732,6 +1742,7 @@ function localDatetimeValue(date) {
 function setRecruitmentStatus(message, tone = "") {
   if (!el.recruitmentStatus) return;
   el.recruitmentStatus.textContent = message;
+  el.recruitmentStatus.classList.toggle("hidden", !message);
   el.recruitmentStatus.classList.toggle("success", tone === "success");
   el.recruitmentStatus.classList.toggle("error", tone === "error");
 }
@@ -2417,6 +2428,8 @@ function renderAll() {
   document.body.dataset.mode = state.appMode;
   el.setupPanel.classList.toggle("hidden", state.appMode !== "setup");
   el.roomPanel.classList.toggle("hidden", state.appMode === "setup");
+  // Reveal the board before measuring card rows when a waiting player starts a game.
+  renderGameVisibility();
   el.guestModeToggle.disabled = state.roomJoined;
   updateIdentityModeUi();
   renderSoundToggle();
@@ -2477,6 +2490,18 @@ function renderAll() {
   renderAssist();
   renderTournament();
   renderTournamentWorkspace();
+}
+
+function renderGameVisibility() {
+  const playing = state.roomState === "playing";
+  const watching = playing && !state.isWaiting;
+  el.gameColumn?.classList.toggle("hidden", !playing);
+  el.playArea?.classList.toggle("hidden", !playing || watching);
+  if (el.spectatorTurn) {
+    el.spectatorTurn.classList.toggle("hidden", !watching);
+    el.spectatorTurn.textContent = watching ? `${state.currentTurn || "プレイヤー"}の番` : "";
+  }
+  if (!playing || watching) setActionError("");
 }
 
 function renderRecruitments() {
@@ -2664,7 +2689,7 @@ function renderTournament() {
     const playingSeconds = tournament?.playing_disconnect_grace_seconds ?? 60;
     const waitingSeconds = tournament?.waiting_disconnect_grace_seconds ?? 60;
     const callPolicy = tournament?.pairing_mode === "flexible"
-      ? `参加確認は${readySeconds}秒以内です。未確認なら呼び出しを解除し、受付を停止します。不在または無反応による受付停止から5分で棄権が確定します。復帰後は「対戦受付を再開」を押してください。棄権後は観戦のみです。再戦はありません。`
+      ? `参加確認は${readySeconds}秒以内です。未確認なら呼び出しを解除し、受付を停止します。不在または無反応による受付停止から5分で棄権が確定します。通信切断は5分以内に復帰すると自動で受付を再開します。未確認・退出による停止は「対戦受付を再開」を押してください。棄権後は観戦のみです。再戦はありません。`
       : `対戦呼び出しは両者確認で即開始、未確認でも両者接続中なら${readySeconds}秒後に自動開始します。`;
     el.tournamentTimingNote.textContent = `対局は1手${turnSeconds}秒で、時間切れは自動パスです。${callPolicy} 切断した席の保持は対戦中${formatDuration(playingSeconds)}、ロビー待機中${formatDuration(waitingSeconds)}です。順位は勝ち数で決め、同勝数は同順位です。`;
   }
@@ -2686,7 +2711,7 @@ function renderTournamentAvailability() {
   const paused = !!participant.unavailable_since && !participant.retired_at && running;
   const seconds = Math.max(0, Math.ceil((Date.parse(participant.retirement_deadline_at) - Date.now() - state.serverOffsetMs) / 1000));
   el.tournamentAvailabilityText.textContent = participant.retired_at ? "棄権確定。この開催回は観戦のみ可能です。"
-    : paused ? `対戦受付を停止しています。棄権まで残り${seconds}秒（猶予5分）。「対戦受付を再開」を押してください。`
+    : paused ? `対戦受付を停止しています。棄権まで残り${seconds}秒（猶予5分）。${participant.unavailable_reason === "disconnected" ? "通信復帰すると自動で受付を再開します。" : "「対戦受付を再開」を押してください。"}`
     : running ? "対戦受付中。未対戦の相手が空くと呼び出します。退出・切断による不在が5分続くと棄権になります。"
     : state.tournament.status === "finished" ? "大会終了。最終順位を大会情報から確認できます。" : "参加登録済みです。";
   el.tournamentResumeBtn.classList.toggle("hidden", !paused);
@@ -2703,7 +2728,7 @@ function renderTournamentWorkspace() {
   el.tournamentDetails.classList.toggle("hidden", !visible);
   if (!visible) {
     el.tournamentAvailability?.classList.add("hidden");
-    el.gameColumn?.classList.remove("hidden");
+    el.gameColumn?.classList.toggle("hidden", state.roomState !== "playing");
     el.tournamentSpectatorPanel?.classList.add("hidden");
     el.tournamentFinishedPanel?.classList.add("hidden");
     el.tournamentStageControls?.classList.add("hidden");
@@ -3160,6 +3185,7 @@ function renderRoomList() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "room-slot-card";
+    button.classList.toggle("compact", !!roomGroup.compactRooms);
     button.dataset.roomKey = roomKey;
     button.disabled = state.roomJoined || !available || full;
     button.classList.toggle("active", active);
@@ -3192,7 +3218,7 @@ function renderRoomList() {
     const turnClockSummary = Number.isFinite(turnTimeLimit)
       ? room.tournament ? `${turnTimeLimit}秒・時間切れはパス` : `対人${turnTimeLimit}秒`
       : "";
-    ruleSummary.textContent = [room.summary, turnClockSummary].filter(Boolean).join(" / ");
+    ruleSummary.textContent = [roomGroup.compactRooms ? "" : room.summary, turnClockSummary].filter(Boolean).join(" / ");
 
     const population = document.createElement("span");
     population.className = "room-slot-population";
@@ -3205,7 +3231,10 @@ function renderRoomList() {
     const statusLabel = document.createElement("small");
     statusLabel.className = "room-slot-status";
     statusLabel.textContent = status;
-    button.append(heading, ruleTitle, ruleSummary, population, statusLabel);
+    button.append(heading);
+    if (!roomGroup.compactRooms) button.append(ruleTitle);
+    if (ruleSummary.textContent) button.append(ruleSummary);
+    button.append(population, statusLabel);
     el.roomList.append(button);
   });
 }
@@ -3216,6 +3245,13 @@ function renderServerLobbyStatus() {
 }
 
 function renderNextHint() {
+  // Tournament play keeps this region visible; do not show assist advice in products without it.
+  const hidePlayingHint = state.roomState === "playing" && !state.assistEnabled;
+  el.nextHint.classList.toggle("hidden", hidePlayingHint);
+  if (hidePlayingHint) {
+    el.nextHint.textContent = "";
+    return;
+  }
   if (!state.roomJoined) {
     el.nextHint.textContent = "まず入室します。入室後に対戦参加、CPU追加、開始を選べます。";
     return;
@@ -3345,6 +3381,7 @@ function renderJokerControls() {
     });
     select.value = state.jokerAssignedRanks[index] ?? "inf";
     select.addEventListener("change", () => {
+      setActionError("");
       state.jokerAssignedRanks[index] = select.value;
       renderSelection();
       scheduleAssist();
@@ -3412,6 +3449,7 @@ function renderCompositeJokerControls() {
     });
     select.value = state.compositeJokerAssign[index] ?? "inf";
     select.addEventListener("change", () => {
+      setActionError("");
       state.compositeJokerAssign[index] = select.value;
       renderCompositeZone();
     });
@@ -3510,6 +3548,7 @@ function candidateFinishesRemaining(candidate) {
 }
 
 function toggleCard(card, source = "hand") {
+  setActionError("");
   if (state.compositeMode && source === "hand") {
     addCompositeCard(card);
     return;
@@ -3526,6 +3565,7 @@ function toggleCard(card, source = "hand") {
 }
 
 function toggleCompositeMode() {
+  setActionError("");
   if (state.compositeMode) {
     clearCompositeMode();
   } else {
@@ -3537,6 +3577,7 @@ function toggleCompositeMode() {
 }
 
 function addCompositeCard(card) {
+  setActionError("");
   removeCompositeCard(card.card_id);
   state.selectedCards = state.selectedCards.filter((item) => item.card_id !== card.card_id);
   state.compositeTokens.push({ kind: "card", card_id: card.card_id });
@@ -3547,6 +3588,7 @@ function addCompositeCard(card) {
 }
 
 function addCompositeOp(op) {
+  setActionError("");
   if (!state.compositeMode) return;
   const last = state.compositeTokens[state.compositeTokens.length - 1];
   if (!last || last.kind !== "card") return;
@@ -3555,6 +3597,7 @@ function addCompositeOp(op) {
 }
 
 function removeCompositeToken(index) {
+  setActionError("");
   state.compositeTokens.splice(index, 1);
   normalizeCompositeJokerRanks();
   renderAll();
@@ -3566,6 +3609,7 @@ function removeCompositeCard(cardId) {
 }
 
 function applyAssistCandidate(candidate) {
+  setActionError("");
   const handById = new Map(state.hand.map((card) => [card.card_id, card]));
   state.selectedCards = (candidate.cards || []).map((card) => handById.get(card.card_id)).filter(Boolean);
   state.jokerAssignedRanks = (candidate.assigned_numbers || []).map(String);
@@ -3583,6 +3627,7 @@ function applyAssistCandidate(candidate) {
 }
 
 function clearSelection() {
+  setActionError("");
   state.selectedCards = [];
   state.jokerAssignedRanks = [];
   clearCompositeMode();
@@ -3591,6 +3636,7 @@ function clearSelection() {
 }
 
 function clearCompositeMode() {
+  setActionError("");
   state.compositeMode = false;
   state.compositeTokens = [];
   state.compositeJokerAssign = [];
@@ -3704,25 +3750,37 @@ function compositeSyntaxError(tokens, cards, assigned) {
   return checkNumber();
 }
 
+function setActionError(message) {
+  if (!el.actionError) return;
+  el.actionError.textContent = message;
+  el.actionError.classList.toggle("hidden", !message);
+}
+
+function reportPlayError(message) {
+  setActionError(message);
+  log("error", message);
+}
+
 function playSelected() {
+  setActionError("");
   if (!state.selectedCards.length) return;
   if (state.compositeMode) {
     const lastToken = state.compositeTokens[state.compositeTokens.length - 1];
     if (!lastToken || lastToken.kind !== "card") {
-      log("error", "合成数出しゾーンに材料札で終わる式を作ってください。");
+      reportPlayError("合成数出しゾーンに材料札で終わる式を作ってください。");
       return;
     }
     if (!selectedNumberText() || state.jokerAssignedRanks.some((value) => String(value) === "inf")) {
-      log("error", "合成数出しでは、選択中のジョーカー値を数字にしてください。");
+      reportPlayError("合成数出しでは、選択中のジョーカー値を数字にしてください。");
       return;
     }
     if (state.compositeJokerAssign.some((value) => String(value) === "inf")) {
-      log("error", "合成数出しゾーンのジョーカー値を数字にしてください。");
+      reportPlayError("合成数出しゾーンのジョーカー値を数字にしてください。");
       return;
     }
     const syntaxError = compositeSyntaxError(state.compositeTokens, state.hand, state.compositeJokerAssign);
     if (syntaxError) {
-      log("error", syntaxError);
+      reportPlayError(syntaxError);
       return;
     }
     send({
@@ -3956,7 +4014,10 @@ function sendChat() {
 }
 
 function send(payload) {
+  const gameAction = ["play_card", "draw_card", "pass"].includes(payload.type);
+  if (gameAction) setActionError("");
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+    if (gameAction) setActionError("サーバーへの再接続を待ってから操作してください。");
     log("error", "まだサーバーに接続できていません。");
     return;
   }
@@ -3969,6 +4030,12 @@ function setConnection(kind, label, detail) {
   if (kind === "error") el.connectionDot.classList.add("error");
   el.connectionLabel.textContent = label;
   el.serverLabel.textContent = detail;
+  el.serverLabel.classList.toggle("hidden", kind !== "error");
+  el.connectionStatus?.classList.toggle("is-error", kind === "error");
+  if (el.roomConnectionStatus) {
+    el.roomConnectionStatus.textContent = kind === "error" ? `${label}。${detail}` : label;
+    el.roomConnectionStatus.classList.toggle("hidden", kind === "online");
+  }
 }
 
 function largestPrimeShareHref(action) {
@@ -4001,12 +4068,7 @@ function log(sender, message, target = el.roomLogBox, action = null) {
     link.textContent = "Xで共有";
     line.append(document.createTextNode(" "), link);
   }
-  if (target === el.tournamentMatchLogBox) {
-    target.appendChild(line);
-    target.scrollTop = target.scrollHeight;
-  } else {
-    target.prepend(line);
-  }
+  target.prepend(line);
 }
 
 function logTournamentMatch(sender, message, action = null) {
@@ -4067,11 +4129,9 @@ function logScoreRecord(lines, target = el.roomLogBox) {
   pre.textContent = lines.join("\n");
   entry.appendChild(pre);
 
+  target.prepend(entry);
   if (target === el.tournamentMatchLogBox) {
-    target.appendChild(entry);
     if (state.chatMode !== "match") state.tournamentMatchUnreadCount += 1;
-  } else {
-    target.prepend(entry);
   }
 }
 
