@@ -1,6 +1,7 @@
 const params = new URLSearchParams(location.search);
 const wsUrl = params.get("ws") || "wss://web-production-c8e68.up.railway.app/ws/plus";
 const el = Object.fromEntries([
+  "hyakkiCurrentRule", "hyakkiRuleKey", "hyakkiApplyBtn",
   "connectionStatus", "scheduleForm", "adminToken", "title", "formatKey", "ruleKey",
   "registrationOpensAt", "startsAt", "maxParticipants", "refreshBtn", "historyBtn",
   "runSummary", "currentMatch", "matchList", "standings", "historyList", "messageLog",
@@ -9,6 +10,10 @@ const el = Object.fromEntries([
 let ws;
 let tournament = null;
 
+el.hyakkiApplyBtn.addEventListener("click", () => send({
+  type: "tournament_admin_hyakki_rule", admin_token: el.adminToken.value,
+  rule_key: el.hyakkiRuleKey.value,
+}));
 setDefaultDates();
 connect();
 el.pairingMode.addEventListener("change", () => {
@@ -56,6 +61,7 @@ function connect() {
     el.connectionStatus.textContent = "接続済み";
     el.connectionStatus.classList.add("online");
     send({ type: "get_tournament_status" });
+    send({ type: "get_hyakki_room_rules" });
   });
   ws.addEventListener("close", () => {
     el.connectionStatus.textContent = "切断";
@@ -71,6 +77,19 @@ function send(payload) {
 }
 
 function handleMessage(msg) {
+  if (msg.type === "hyakki_room_rules") {
+    const rules = msg.available_rules || [];
+    el.hyakkiRuleKey.replaceChildren(...rules.map(rule => {
+      const option = document.createElement("option");
+      option.value = rule.key; option.textContent = rule.label; return option;
+    }));
+    el.hyakkiRuleKey.value = Object.values(msg.room_rules || {})[0] || "";
+    const keys = [...new Set(Object.values(msg.room_rules || {}))];
+    el.hyakkiCurrentRule.textContent = "現在のルール: " + keys.map(key =>
+      rules.find(rule => rule.key === key)?.label || key).join(" / ")
+      + (msg.persistent ? "（保存済み）" : "（再起動までの一時設定）");
+    return;
+  }
   if (msg.type === "tournament_update" || msg.type === "tournament_admin_result") {
     tournament = msg.tournament;
     renderRuleOptions(tournament?.available_rules || []);

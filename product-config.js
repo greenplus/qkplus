@@ -15,7 +15,7 @@ window.PRIMEQK_CLIENT_CONFIG = {
     },
     plus: {
       label: "Plus",
-      roomKeys: ["plus1", "plus2", "plus3"],
+      roomKeys: ["plus1", "plus2", "plus3", "hyakkiArchive"],
     },
     tournament: {
       label: "大会",
@@ -104,6 +104,11 @@ window.PRIMEQK_CLIENT_CONFIG = {
       summary: "11枚 / 通常",
       badge: "半素数 / 11枚 / 通常",
     },
+    hyakkiArchive: {
+      roomId: "hyakki_archive_1", roomGroupKey: "plus", roomNumber: 4,
+      label: "百鬼夜行", title: "百鬼夜行・ルール選択",
+      summary: "入室後に過去のルールを選択", badge: "百鬼夜行・ルール選択",
+    },
     plusTournament: {
       roomId: "plus_tournament_1",
       roomGroupKey: "tournament",
@@ -120,8 +125,8 @@ window.PRIMEQK_CLIENT_CONFIG = {
       roomNumber: 1,
       label: "百鬼夜行",
       title: "素数大富豪百鬼夜行",
-      summary: "nがn枚・X2枚 / 32枚バースト",
-      badge: "百鬼夜行 / 初期11枚 / 計93枚 / nがn枚 / 32枚バースト",
+      summary: "後手のみX1枚保証",
+      badge: "百鬼夜行 / 初期11枚 / 後手のみX1枚保証",
     },
     hyakkiYagyo2: {
       roomId: "hyakki_yagyo_2",
@@ -129,8 +134,8 @@ window.PRIMEQK_CLIENT_CONFIG = {
       roomNumber: 2,
       label: "百鬼夜行",
       title: "素数大富豪百鬼夜行",
-      summary: "nがn枚・X2枚 / 32枚バースト",
-      badge: "百鬼夜行 / 初期11枚 / 計93枚 / nがn枚 / 32枚バースト",
+      summary: "後手のみX1枚保証",
+      badge: "百鬼夜行 / 初期11枚 / 後手のみX1枚保証",
     },
     hyakkiYagyo3: {
       roomId: "hyakki_yagyo_3",
@@ -138,8 +143,8 @@ window.PRIMEQK_CLIENT_CONFIG = {
       roomNumber: 3,
       label: "百鬼夜行",
       title: "素数大富豪百鬼夜行",
-      summary: "nがn枚・X2枚 / 32枚バースト",
-      badge: "百鬼夜行 / 初期11枚 / 計93枚 / nがn枚 / 32枚バースト",
+      summary: "後手のみX1枚保証",
+      badge: "百鬼夜行 / 初期11枚 / 後手のみX1枚保証",
     },
   },
   defaultSampleKey: "",

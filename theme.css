@@ -232,3 +232,25 @@ body[data-mode="playing"] .tournament-unified .tournament-details {
     flex-direction: column;
   }
 }
+#specialRuleControl {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin-block: 10px;
+}
+
+#specialRuleSelect {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 8px;
+  border: 1px solid var(--line, #cbd5df);
+  border-radius: 8px;
+  background: white;
+  font: inherit;
+}
+
+#hyakkiRuleHelp p {
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}

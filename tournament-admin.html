@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>素数大富豪＋ 大会管理</title>
-    <link rel="stylesheet" href="./tournament-admin.css?v=flexible-20260923" />
+    <link rel="stylesheet" href="./tournament-admin.css?v=hyakki-20261006-1" />
   </head>
   <body>
     <main class="admin-shell">
@@ -17,6 +17,13 @@
         <span id="connectionStatus" class="connection-status">接続準備中</span>
       </header>
 
+      <section class="card">
+        <h2>百鬼夜行の通常3部屋</h2>
+        <p id="hyakkiCurrentRule">現在のルールを読み込み中</p>
+        <label>ルール<select id="hyakkiRuleKey"></select></label>
+        <button id="hyakkiApplyBtn" class="primary" type="button">3部屋のルールを変更</button>
+        <p>下の管理トークンを使用します。対戦中・開始確認中・手番交互対戦中は変更できません。</p>
+      </section>
       <section class="admin-grid">
         <form id="scheduleForm" class="card">
           <h2>開催回を設定</h2>
@@ -78,6 +85,6 @@
 
       <section id="messageLog" class="message-log" aria-live="polite"></section>
     </main>
-    <script src="./tournament-admin.js?v=flexible-20260923"></script>
+    <script src="./tournament-admin.js?v=hyakki-20261006-1"></script>
   </body>
 </html>
