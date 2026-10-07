@@ -43,6 +43,8 @@ const CONNECTION_DIAGNOSTICS_KEY = "prime-daifugo-" + CONFIG.productKey + "-conn
 const PLAYER_JOINED_SOUND_URL = CONFIG.playerJoinedSoundUrl || "./assets/sounds/player-joined.mp3";
 let playerJoinedAudio = null;
 let soundUnlockPromise = null;
+const turnEffectAudios = new Map();
+let turnSoundClock = null;
 
 const state = {
   ws: null,
@@ -1257,6 +1259,10 @@ function handleMessage(msg) {
       renderAssist();
       break;
     case "action_result":
+      if (msg.action === "pass" && msg.reason === "turn_timeout" && msg.player_id === state.playerId) {
+        turnSoundClock = null;
+        playEffectSound(getTurnEffectAudio("turn-timeout"));
+      }
       if (msg.action === "field_flow") {
         showFlowPreview(msg.played_cards || [], msg.number);
       }
@@ -2349,6 +2355,7 @@ function syncTurnClock(message) {
 }
 
 function clearTurnClock() {
+  turnSoundClock = null;
   state.turnSeq = null;
   state.turnStartedAtMs = null;
   state.turnDeadlineAtMs = null;
@@ -2388,6 +2395,7 @@ function formatTurnClock(seconds) {
 
 function renderTurnClock() {
   const snapshot = state.roomState === "playing" ? clockSnapshot(state) : null;
+  notifyTurnClock(snapshot);
   if (el.turnClockMetric && el.turnClockLabel && el.turnClockValue) {
     el.turnClockLabel.textContent = snapshot?.label || "時間";
     el.turnClockValue.textContent = snapshot ? formatTurnClock(snapshot.seconds) : "--";
@@ -2410,6 +2418,33 @@ function renderTurnClock() {
     el.turnBadge.classList.toggle("clock-urgent", Boolean(snapshot?.timed && snapshot.seconds <= 5));
   }
   renderTournamentSpectatorTurnClock();
+}
+
+function notifyTurnClock(snapshot) {
+  if (!snapshot?.timed || !state.connected || !state.roomJoined || !state.isWaiting || !isMyTurn()) {
+    turnSoundClock = null;
+    return;
+  }
+  const key = `${currentRoomId()}:${state.turnSeq}:${state.turnStartedAtMs}:${state.turnDeadlineAtMs}`;
+  if (turnSoundClock?.key !== key) {
+    // 初回同期・途中復帰では、既に過ぎた通知をまとめて鳴らさない。
+    turnSoundClock = { key, seconds: snapshot.seconds, notified: new Set() };
+    return;
+  }
+  const previousSeconds = turnSoundClock.seconds;
+  turnSoundClock.seconds = snapshot.seconds;
+  for (const threshold of [20, 10]) {
+    if (previousSeconds > threshold && snapshot.seconds <= threshold && !turnSoundClock.notified.has(threshold)) {
+      turnSoundClock.notified.add(threshold);
+      // 非表示タブ等で大幅に遅れた通知は再生せず、0秒では確定通知を待つ。
+      if (snapshot.seconds > 0 && snapshot.seconds >= threshold - 2) {
+        playEffectSound(getTurnEffectAudio("turn-warning"), () => (
+          turnSoundClock?.key === key && isMyTurn() && state.connected
+          && clockSnapshot(state)?.seconds > 0
+        ));
+      }
+    }
+  }
 }
 
 function renderTournamentSpectatorTurnClock() {
@@ -3054,11 +3089,23 @@ function getPlayerJoinedAudio() {
   return playerJoinedAudio;
 }
 
+function getTurnEffectAudio(name) {
+  if (!turnEffectAudios.has(name)) {
+    const audio = new Audio(`./assets/sounds/${name}.mp3`);
+    audio.preload = "auto";
+    turnEffectAudios.set(name, audio);
+  }
+  return turnEffectAudios.get(name);
+}
+
 function toggleSound() {
   state.soundEnabled = !state.soundEnabled;
   saveSoundPreference();
   renderSoundToggle();
   if (state.soundEnabled) unlockSoundPlayback();
+  else {
+    [playerJoinedAudio, ...turnEffectAudios.values()].forEach((audio) => audio?.pause());
+  }
 }
 
 function renderSoundToggle() {
@@ -3073,11 +3120,12 @@ function renderSoundToggle() {
 
 function unlockSoundPlayback() {
   if (!state.soundEnabled || soundUnlockPromise) return soundUnlockPromise;
-  const audio = getPlayerJoinedAudio();
-  const previousVolume = audio.volume;
-  audio.muted = true;
-  audio.volume = 0;
-  soundUnlockPromise = audio.play()
+  const audios = [getPlayerJoinedAudio(), getTurnEffectAudio("turn-warning"), getTurnEffectAudio("turn-timeout")];
+  soundUnlockPromise = Promise.all(audios.map((audio) => {
+    const previousVolume = audio.volume;
+    audio.muted = true;
+    audio.volume = 0;
+    return audio.play()
     .then(() => {
       audio.pause();
       audio.currentTime = 0;
@@ -3088,18 +3136,22 @@ function unlockSoundPlayback() {
       audio.currentTime = 0;
       audio.volume = previousVolume;
       audio.muted = false;
-      soundUnlockPromise = null;
     });
+  })).finally(() => { soundUnlockPromise = null; });
   return soundUnlockPromise;
 }
 
 function playPlayerJoinedSound() {
+  playEffectSound(getPlayerJoinedAudio());
+}
+
+function playEffectSound(audio, stillRelevant = () => true) {
   if (!state.soundEnabled) return;
   if (soundUnlockPromise) {
-    soundUnlockPromise.then(() => playPlayerJoinedSound());
+    soundUnlockPromise.then(() => playEffectSound(audio, stillRelevant));
     return;
   }
-  const audio = getPlayerJoinedAudio();
+  if (!stillRelevant()) return;
   audio.pause();
   audio.currentTime = 0;
   audio.muted = false;
