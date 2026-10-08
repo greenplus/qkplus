@@ -11,7 +11,7 @@ window.PRIMEQK_CLIENT_CONFIG = {
   roomGroups: {
     classic: {
       label: "Classic",
-      roomKeys: ["classic1", "classic2", "classic3", "classic4", "classic5", "classic6"],
+      roomKeys: ["classic1", "classic2", "classic3", "classic4", "classic5", "classic6", "multiBeginner", "multiNormal"],
     },
     plus: {
       label: "Plus",
@@ -76,6 +76,24 @@ window.PRIMEQK_CLIENT_CONFIG = {
       title: "11枚 / 通常",
       summary: "合成数あり",
       badge: "11枚 / 通常 / 合成数あり",
+    },
+    multiBeginner: {
+      roomId: "classic_multi_beginner",
+      roomGroupKey: "classic",
+      roomNumber: 7,
+      label: "Classic",
+      title: "多人数・初級",
+      summary: "1～6人 / 7枚 / 偶数半減 / ペナルティ1枚",
+      badge: "多人数・初級 / 1～6人 / 7枚 / 偶数半減 / ペナルティ1枚",
+    },
+    multiNormal: {
+      roomId: "classic_multi_normal",
+      roomGroupKey: "classic",
+      roomNumber: 8,
+      label: "Classic",
+      title: "多人数・通常",
+      summary: "1～4人 / 11枚 / 通常 / 合成数あり",
+      badge: "多人数・通常 / 1～4人 / 11枚 / 通常 / 合成数あり",
     },
     plus1: {
       roomId: "room_7",

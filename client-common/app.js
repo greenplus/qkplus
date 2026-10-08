@@ -1204,6 +1204,7 @@ function handleMessage(msg) {
       state.appMode = "playing";
       state.roomState = "playing";
       state.firstPlayerId = null;
+      state.turnOrderIds = [];
       syncTurnClock(msg);
       if (typeof msg.hnp_challenge_enabled === "boolean") state.hnpChallengeEnabled = msg.hnp_challenge_enabled;
       clearFlowPreview(false);
@@ -1224,6 +1225,7 @@ function handleMessage(msg) {
       state.roomState = msg.state || state.roomState;
       state.currentTurn = msg.current_turn || "";
       state.firstPlayerId = msg.first_player_id || state.firstPlayerId;
+      state.turnOrderIds = msg.turn_order_ids || [];
       state.currentRoomHasCpu = (msg.player_list || []).some((player) => player.is_cpu);
       syncTurnClock(msg);
       if (isTournamentRoom() && msg.tournament) setTournamentState(msg.tournament);
@@ -1898,6 +1900,7 @@ function startGame() {
   const continuingSeries = isContinuingTurnAlternationSeries(participants);
   const alternate = Boolean(
     CONFIG.features.turnAlternation
+    && !state.roomRuleDetails[currentRoomId()]?.multiplayer_enabled
     && (state.turnAlternationEnabled || continuingSeries)
     && participantCount === 2
   );
@@ -1952,6 +1955,7 @@ function startGameRequestTurnText(request) {
 function renderTurnOrderSettings() {
   if (!el.turnOrderSettings || !CONFIG.features.turnAlternation) return;
   const tournamentRoom = isTournamentRoom();
+  const multiplayerRoom = !!state.roomRuleDetails[currentRoomId()]?.multiplayer_enabled;
   const participants = state.players.filter((player) => player.status === "waiting");
   const twoPlayerGame = participants.length === 2;
   const pending = Boolean(state.startGameRequest);
@@ -1964,8 +1968,9 @@ function renderTurnOrderSettings() {
     && twoPlayerGame
     && !pending
     && !tournamentRoom
+    && !multiplayerRoom
   );
-  el.turnOrderSettings.classList.toggle("hidden", tournamentRoom);
+  el.turnOrderSettings.classList.toggle("hidden", tournamentRoom || multiplayerRoom);
   el.turnAlternationToggle.checked = state.turnAlternationEnabled || continuingSeries;
   el.turnAlternationToggle.disabled = !controlsEnabled || continuingSeries;
   el.turnAlternationFirstSelect.value = state.turnAlternationFirst;
@@ -2180,20 +2185,26 @@ function readableSampleLabel(option) {
 
 function renderPlayers(players, waitingCount) {
   state.players = players;
+  const multiplayer = !!state.roomRuleDetails[currentRoomId()]?.multiplayer_enabled;
+  el.playerList.closest(".status-list").classList.toggle("multiplayer", multiplayer);
+  el.playerList.previousElementSibling.textContent = multiplayer && state.roomState === "playing" ? "手番順" : "参加";
   const self = players.find((player) => player.id === state.playerId);
   if (self) state.isWaiting = self.status === "waiting";
   const participants = players
     .filter((player) => player.status === "waiting")
+    .sort((a, b) => state.roomState === "playing" && state.roomRuleDetails[currentRoomId()]?.multiplayer_enabled
+      ? (state.turnOrderIds || []).indexOf(a.id) - (state.turnOrderIds || []).indexOf(b.id)
+      : 0)
     .map(playerLabel);
   const watchers = players
     .filter((player) => player.status !== "waiting")
     .map(playerLabel);
-  el.playerList.textContent = participants.length ? participants.join("、") : "なし";
+  el.playerList.textContent = participants.length ? participants.join(state.roomState === "playing" && state.roomRuleDetails[currentRoomId()]?.multiplayer_enabled ? " → " : "、") : "なし";
   el.watcherList.textContent = watchers.length ? watchers.join("、") : "なし";
   el.playerList.title = participants.join("、");
   el.watcherList.title = watchers.join("、");
   if (waitingCount !== null) {
-    const canStart = state.isWaiting && (waitingCount === 1 || waitingCount === 2);
+    const canStart = state.isWaiting && waitingCount >= 1 && waitingCount <= (state.roomRuleDetails[currentRoomId()]?.max_players || 2);
     el.startBtn.disabled = !canStart;
   }
 }
@@ -2280,6 +2291,11 @@ function renderHandMetrics() {
     const spectatorCounts = spectatorHandCounts();
     renderSpectatorHandMetric(el.myHandMetric, el.myHandLabel, el.myHandCount, "先手", spectatorCounts[0]);
     renderSpectatorHandMetric(el.opponentMetric, el.opponentLabel, el.opponentCounts, "後手", spectatorCounts[1]);
+    if (state.roomRuleDetails[currentRoomId()]?.multiplayer_enabled) {
+      renderSpectatorHandMetric(el.myHandMetric, el.myHandLabel, el.myHandCount, "先手", spectatorCounts[0]);
+      el.opponentLabel.textContent = "他の対戦者";
+      renderOpponentCounts(spectatorCounts.slice(1), { excludeSelf: false });
+    }
     return;
   }
 
@@ -2311,8 +2327,8 @@ function renderSpectatorHandMetric(metric, label, count, side, player) {
   metric.setAttribute("aria-label", description);
 }
 
-function renderOpponentCounts(handCounts) {
-  const opponents = handCounts.filter((item) => (
+function renderOpponentCounts(handCounts, { excludeSelf = true } = {}) {
+  const opponents = handCounts.filter((item) => !excludeSelf || (
     state.playerId && item.id
       ? item.id !== state.playerId
       : item.name !== state.playerName
@@ -2546,9 +2562,14 @@ function renderAll() {
     !state.currentRoomHasCpu
     && !(state.roomCpuProfiles[currentRoomId()] || []).length
   );
-  el.startBtn.disabled = tournamentRoom || startRequestPending || state.roomState === "playing" || !state.isWaiting;
+  const participants = state.players.filter(player => player.status === "waiting");
+  const maxPlayers = state.roomRuleDetails[currentRoomId()]?.max_players || 2;
+  el.startBtn.disabled = tournamentRoom || startRequestPending || state.roomState === "playing" || !state.isWaiting || participants.length < 1 || participants.length > maxPlayers;
+  if (!state.isWaiting && participants.length >= maxPlayers && state.roomRuleDetails[currentRoomId()]?.multiplayer_enabled) el.readyBtn.disabled = true;
   if (el.reconnectPolicyNote) {
-    el.reconnectPolicyNote.textContent = `通信切断時は対戦中${formatDuration(state.playingDisconnectGraceSeconds)}、待機中${formatDuration(state.waitingDisconnectGraceSeconds)}まで同じブラウザから復帰できます。「退室」は復帰待ちになりません。`;
+    el.reconnectPolicyNote.textContent = state.roomRuleDetails[currentRoomId()]?.multiplayer_enabled
+      ? "多人数戦では通信切断・退室した人を対戦から除外し、残りの人で続行します。残り手札はその局から取り除き、復帰後は観戦になります。"
+      : `通信切断時は対戦中${formatDuration(state.playingDisconnectGraceSeconds)}、待機中${formatDuration(state.waitingDisconnectGraceSeconds)}まで同じブラウザから復帰できます。「退室」は復帰待ちになりません。`;
   }
   renderCpuChooser();
   renderTurnOrderSettings();
