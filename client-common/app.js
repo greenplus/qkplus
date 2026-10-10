@@ -245,7 +245,7 @@ function requestInitialLobbyState() {
     send({
       type: "join_room",
       room_id: currentRoomId(),
-      automatic_reconnect: true,
+      automatic_reconnect: state.roomJoined,
       ...(resumeToken ? { resume_token: resumeToken } : {}),
     });
   }
@@ -1049,9 +1049,8 @@ function handleMessage(msg) {
       break;
     case "room_left":
       if (msg.room_id) removeRoomResumeToken(msg.room_id);
-      clearStartGameRequest();
-      state.turnAlternationSeries = null;
-      clearTurnClock();
+      if (!msg.room_id || msg.room_id === currentRoomId()) resetRoomView();
+      if (msg.message) log("system", msg.message);
       break;
     case "update_room_status":
       if (msg.room_id === currentRoomId()) {
@@ -1801,7 +1800,12 @@ function leaveRoom() {
     if (!window.confirm(message)) return;
   }
   send({ type: "leave_room" });
+  resetRoomView();
+}
+
+function resetRoomView() {
   state.roomJoined = false;
+  state.roomState = "waiting";
   state.appMode = "setup";
   state.isWaiting = false;
   state.pendingFlow = null;
@@ -1816,8 +1820,13 @@ function leaveRoom() {
   state.hand = [];
   state.currentTurn = "";
   state.fieldCards = [];
+  state.fieldNumber = "";
+  state.revolution = false;
+  state.deckCount = "-";
+  state.currentRoomHasCpu = false;
   state.handCounts = [];
   state.firstPlayerId = null;
+  state.turnOrderIds = [];
   clearTurnClock();
   state.tournamentView = "list";
   state.tournamentLobbyUnreadCount = 0;
@@ -2567,9 +2576,7 @@ function renderAll() {
   el.startBtn.disabled = tournamentRoom || startRequestPending || state.roomState === "playing" || !state.isWaiting || participants.length < 1 || participants.length > maxPlayers;
   if (!state.isWaiting && participants.length >= maxPlayers && state.roomRuleDetails[currentRoomId()]?.multiplayer_enabled) el.readyBtn.disabled = true;
   if (el.reconnectPolicyNote) {
-    el.reconnectPolicyNote.textContent = state.roomRuleDetails[currentRoomId()]?.multiplayer_enabled
-      ? "多人数戦では通信切断・退室した人を対戦から除外し、残りの人で続行します。残り手札はその局から取り除き、復帰後は観戦になります。"
-      : `通信切断時は対戦中${formatDuration(state.playingDisconnectGraceSeconds)}、待機中${formatDuration(state.waitingDisconnectGraceSeconds)}まで同じブラウザから復帰できます。「退室」は復帰待ちになりません。`;
+    el.reconnectPolicyNote.textContent = `通信切断時は対戦中${formatDuration(state.playingDisconnectGraceSeconds)}、待機中${formatDuration(state.waitingDisconnectGraceSeconds)}まで同じブラウザから復帰できます。猶予切れで退室となり、再入室はメニューから行います。「退室」は復帰待ちになりません。`;
   }
   renderCpuChooser();
   renderTurnOrderSettings();
