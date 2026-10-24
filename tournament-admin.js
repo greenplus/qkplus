@@ -1,7 +1,7 @@
 const params = new URLSearchParams(location.search);
 const wsUrl = params.get("ws") || "wss://web-production-c8e68.up.railway.app/ws/plus";
 const el = Object.fromEntries([
-  "hyakkiCurrentRule", "hyakkiRuleKey", "hyakkiApplyBtn",
+  "hyakkiCurrentRule", "hyakkiRuleKey", "hyakkiApplyBtn", "winsRequired",
   "connectionStatus", "scheduleForm", "adminToken", "title", "formatKey", "ruleKey",
   "registrationOpensAt", "startsAt", "maxParticipants", "refreshBtn", "historyBtn",
   "runSummary", "currentMatch", "matchList", "standings", "historyList", "messageLog",
@@ -31,6 +31,7 @@ el.scheduleForm.addEventListener("submit", (event) => {
     title: el.title.value.trim(),
     format_key: el.formatKey.value.trim(),
     rule_key: el.ruleKey.value,
+    wins_required: Number(el.winsRequired.value),
     registration_opens_at: new Date(el.registrationOpensAt.value).toISOString(),
     starts_at: new Date(el.startsAt.value).toISOString(),
     max_participants: Number(el.maxParticipants.value),
@@ -114,6 +115,7 @@ function renderTournament() {
   }
   el.runSummary.className = "run-summary";
   el.runSummary.textContent = `${tournament.title} / ${tournament.rule?.summary || tournament.rule_key} / ${statusLabel(tournament.status)} / ${formatDate(tournament.starts_at)}開始 / ${tournament.participant_count}人`;
+  el.runSummary.textContent += ` / ${tournament.wins_required || 1}本先取`;
   if (tournament.pairing_mode === "flexible") el.runSummary.textContent += ` / 随時対戦 / 途中参加は${formatDate(tournament.registration_closes_at)}まで`;
   const activeMatches = tournament.active_matches || (tournament.current_match ? [tournament.current_match] : []);
   el.currentMatch.className = activeMatches.length ? "current-match active" : "current-match empty";
@@ -127,6 +129,7 @@ function renderTournament() {
     const heading = document.createElement("header");
     const title = document.createElement("strong");
     title.textContent = `${matchLabel(match)} ${match.player1_name} vs ${match.player2_name}`;
+    if (tournament.wins_required > 1) title.textContent += `（${match.game_wins?.[match.player1_id] || 0}–${match.game_wins?.[match.player2_id] || 0}）`;
     const status = document.createElement("span");
     status.textContent = match.winner_name ? `${match.winner_name} 勝利` : statusLabel(match.status);
     heading.append(title, status);
@@ -145,6 +148,7 @@ function renderTournament() {
     const item = document.createElement("li");
     const retired = tournament.participants?.find(p => p.participant_id === row.participant_id)?.retired_at;
     item.textContent = `${row.rank}位 ${row.display_name}${retired ? "（棄権）" : ""}: ${row.wins}勝${row.losses}敗`;
+    if (tournament.wins_required > 1) item.textContent += ` / ${row.games_won}–${row.games_lost}本（差${row.game_difference > 0 ? "+" : ""}${row.game_difference}）`;
     return item;
   }));
 }

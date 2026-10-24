@@ -2259,6 +2259,14 @@ function renderFieldCards() {
   el.fieldNumber.textContent = isPreview
     ? displayFieldNumber(state.flowPreviewNumber)
     : displayFieldNumber(state.fieldNumber);
+  let countLabel = document.getElementById("fieldDisplayCount");
+  if (!countLabel) {
+    countLabel = document.createElement("span");
+    countLabel.id = "fieldDisplayCount";
+    countLabel.className = "field-display-count";
+    el.fieldNumber.after(countLabel);
+  }
+  countLabel.textContent = field.length ? `（${field.length}枚）` : "";
   el.fieldZone.classList.toggle("revolution", state.revolution);
   if (!field.length) {
     setCardRowColumns(el.fieldCards, 1);
@@ -2793,6 +2801,7 @@ function renderTournament() {
     const item = document.createElement("li");
     const retired = tournament?.participants?.find(p => p.participant_id === row.participant_id)?.retired_at;
     item.textContent = `${row.rank}位 ${row.display_name}${retired ? "（棄権）" : ""} — ${row.wins}勝${row.losses}敗`;
+    if (tournament?.wins_required > 1) item.textContent += ` / ${row.games_won}–${row.games_lost}本（差${row.game_difference > 0 ? "+" : ""}${row.game_difference}）`;
     if (row.participant_id === state.tournamentParticipantId) item.classList.add("self");
     el.tournamentStandings.appendChild(item);
   });
@@ -2810,7 +2819,7 @@ function renderTournament() {
     const callPolicy = tournament?.pairing_mode === "flexible"
       ? `参加確認は${readySeconds}秒以内です。未確認なら呼び出しを解除し、受付を停止します。不在または無反応による受付停止から5分で棄権が確定します。通信切断は5分以内に復帰すると自動で受付を再開します。未確認・退出による停止は「対戦受付を再開」を押してください。棄権後は観戦のみです。再戦はありません。`
       : `対戦呼び出しは両者確認で即開始、未確認でも両者接続中なら${readySeconds}秒後に自動開始します。`;
-    el.tournamentTimingNote.textContent = `対局は1手${turnSeconds}秒で、時間切れは自動パスです。${callPolicy} 切断した席の保持は対戦中${formatDuration(playingSeconds)}、ロビー待機中${formatDuration(waitingSeconds)}です。順位は勝ち数で決め、同勝数は同順位です。`;
+    el.tournamentTimingNote.textContent = `${tournament?.wins_required || 1}本先取。${tournament?.wins_required > 1 ? "初戦の先後はランダム、以降は勝敗に関係なく交代します。" : ""}対局は1手${turnSeconds}秒で、時間切れは自動パスです。${callPolicy} 切断した席の保持は対戦中${formatDuration(playingSeconds)}、ロビー待機中${formatDuration(waitingSeconds)}です。順位は試合勝利数→本数差→直接対決（同順位者間の試合勝利数→本数差）で決定。同順位者が残ればその人たちだけで再比較し、差がつかなければ同順位です。`;
   }
   renderTournamentAvailability();
 }

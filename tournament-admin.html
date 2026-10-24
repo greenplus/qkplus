@@ -51,6 +51,8 @@
               <option value="semiprime-11-1-c">半素数 / 11枚 / ペナルティ1枚</option>
             </select>
           </label>
+          <label>先取本数<select id="winsRequired"><option value="1">1本先取</option><option value="2">2本先取（試合内で先後交代）</option></select></label>
+          <p class="note">順位は試合勝利数→本数差→直接対決。同順位者間の勝利数・本数差で比較し、残った同順位者だけで再比較します。不戦勝は2本先取なら2–0、1本先取なら1–0です。結果訂正の勝利ボタンも同じ本数で上書きします。</p>
           <label>参加登録開始<input id="registrationOpensAt" type="datetime-local" required /></label>
           <label>大会開始<input id="startsAt" type="datetime-local" required /></label>
           <label id="registrationClosesLabel" hidden>途中参加の受付終了<input id="registrationClosesAt" type="datetime-local" /></label>

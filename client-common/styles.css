@@ -1473,6 +1473,13 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+.field-display-count {
+  display: inline-block;
+  font-size: 0.8em;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .field-strip > .field-zone.revolution {
   border-color: #344740;
   background: #1c2924;
