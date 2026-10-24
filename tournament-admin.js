@@ -1,14 +1,15 @@
 const params = new URLSearchParams(location.search);
 const wsUrl = params.get("ws") || "wss://web-production-c8e68.up.railway.app/ws/plus";
 const el = Object.fromEntries([
-  "hyakkiCurrentRule", "hyakkiRuleKey", "hyakkiApplyBtn", "winsRequired",
-  "connectionStatus", "scheduleForm", "adminToken", "title", "formatKey", "ruleKey",
+  "hyakkiCurrentRule", "hyakkiRuleKey", "hyakkiApplyBtn", "winsRequired", "cancelTournamentBtn", "reservationList",
+  "connectionStatus", "scheduleForm", "scheduleBtn", "cancelConfirmation", "cancelConfirmationText", "cancelConfirmBtn", "cancelBackBtn", "adminToken", "title", "formatKey", "ruleKey",
   "registrationOpensAt", "startsAt", "maxParticipants", "refreshBtn", "historyBtn",
   "runSummary", "currentMatch", "matchList", "standings", "historyList", "messageLog",
   "pairingMode", "registrationClosesAt", "registrationClosesLabel", "flexiblePolicy",
 ].map((id) => [id, document.getElementById(id)]));
 let ws;
 let tournament = null;
+let pendingCancellation = null;
 
 el.hyakkiApplyBtn.addEventListener("click", () => send({
   type: "tournament_admin_hyakki_rule", admin_token: el.adminToken.value,
@@ -22,8 +23,12 @@ el.pairingMode.addEventListener("change", () => {
   el.registrationClosesAt.required = flexible;
 });
 
-el.scheduleForm.addEventListener("submit", (event) => {
-  event.preventDefault();
+el.scheduleForm.addEventListener("submit", event => event.preventDefault());
+el.scheduleForm.addEventListener("keydown", event => {
+  if (event.key === "Enter") event.preventDefault();
+});
+el.scheduleBtn.addEventListener("click", () => {
+  if (!el.scheduleForm.reportValidity()) return;
   send({
     type: "tournament_admin_schedule",
     admin_token: el.adminToken.value,
@@ -40,6 +45,29 @@ el.scheduleForm.addEventListener("submit", (event) => {
   });
 });
 el.refreshBtn.addEventListener("click", () => send({ type: "get_tournament_status" }));
+el.cancelTournamentBtn.addEventListener("click", () => cancelTournament(tournament));
+function cancelTournament(run) {
+  if (!run || run.cancellation_requested_at) return;
+  pendingCancellation = {run_id: run.run_id, title: run.title};
+  el.cancelConfirmationText.textContent = `大会「${run.title}」を中止しますか？`;
+  el.cancelConfirmation.showModal();
+  el.cancelBackBtn.focus();
+}
+function closeCancellationConfirmation() {
+  pendingCancellation = null; el.cancelConfirmation.close();
+}
+el.cancelBackBtn.addEventListener("click", closeCancellationConfirmation);
+el.cancelConfirmation.addEventListener("cancel", event => { event.preventDefault(); closeCancellationConfirmation(); });
+el.cancelConfirmation.addEventListener("keydown", event => {
+  if (event.key === "Escape") closeCancellationConfirmation();
+  if (event.key === "Enter") event.preventDefault();
+});
+el.cancelConfirmBtn.addEventListener("click", () => {
+  if (!pendingCancellation) return;
+  const runId = pendingCancellation.run_id;
+  closeCancellationConfirmation();
+  send({type: "tournament_admin_cancel", admin_token: el.adminToken.value, room_id: "plus_tournament_1", run_id: runId});
+});
 el.historyBtn.addEventListener("click", () => send({
   type: "tournament_admin_history",
   admin_token: el.adminToken.value,
@@ -51,6 +79,7 @@ el.matchList.addEventListener("click", (event) => {
     type: button.dataset.action === "skip" ? "tournament_admin_skip" : "tournament_admin_resolve",
     admin_token: el.adminToken.value,
     room_id: "plus_tournament_1",
+    run_id: tournament?.run_id,
     match_id: button.dataset.matchId,
     ...(button.dataset.winnerId ? { winner_id: button.dataset.winnerId } : {}),
   });
@@ -104,6 +133,15 @@ function handleMessage(msg) {
 }
 
 function renderTournament() {
+  el.cancelTournamentBtn.hidden = !["scheduled", "registration", "running"].includes(tournament?.status) || !!tournament?.cancellation_requested_at;
+  el.reservationList.replaceChildren(...(tournament?.reservations || []).map(run => {
+    const row = document.createElement("article"); row.className = "history-row";
+    const text = document.createElement("p");
+    text.textContent = `${run.title} / ${run.rule?.summary || ""} / ${run.wins_required || 1}本先取 / ${formatDate(run.registration_opens_at)}受付 / ${formatDate(run.starts_at)}開始予定`;
+    const cancel = document.createElement("button"); cancel.type = "button"; cancel.textContent = "予約を中止";
+    cancel.addEventListener("click", () => cancelTournament(run)); row.append(text, cancel); return row;
+  }));
+  if (!el.reservationList.children.length) el.reservationList.textContent = "次の予約はありません。";
   if (!tournament || tournament.status === "unavailable") {
     el.runSummary.textContent = "大会は設定されていません。";
     el.runSummary.className = "run-summary empty";
@@ -116,6 +154,8 @@ function renderTournament() {
   el.runSummary.className = "run-summary";
   el.runSummary.textContent = `${tournament.title} / ${tournament.rule?.summary || tournament.rule_key} / ${statusLabel(tournament.status)} / ${formatDate(tournament.starts_at)}開始 / ${tournament.participant_count}人`;
   el.runSummary.textContent += ` / ${tournament.wins_required || 1}本先取`;
+  if (tournament.cancellation_requested_at) el.runSummary.textContent += " / 中止受付済み・進行中の対局終了待ち";
+  if (tournament.schedule_delay_seconds > 0) el.runSummary.textContent += " / 前の大会の終了待ちにより時刻を繰り下げ済み";
   if (tournament.pairing_mode === "flexible") el.runSummary.textContent += ` / 随時対戦 / 途中参加は${formatDate(tournament.registration_closes_at)}まで`;
   const activeMatches = tournament.active_matches || (tournament.current_match ? [tournament.current_match] : []);
   el.currentMatch.className = activeMatches.length ? "current-match active" : "current-match empty";

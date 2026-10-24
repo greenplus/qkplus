@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>素数大富豪＋ 大会管理</title>
-    <link rel="stylesheet" href="./tournament-admin.css?v=hyakki-20261006-1" />
+    <link rel="stylesheet" href="./tournament-admin.css?v=tournament-20261025-1" />
   </head>
   <body>
     <main class="admin-shell">
@@ -58,7 +58,7 @@
           <label id="registrationClosesLabel" hidden>途中参加の受付終了<input id="registrationClosesAt" type="datetime-local" /></label>
           <p id="flexiblePolicy" class="note" hidden>随時対戦は再戦なし・双方確認で開始。参加確認は60秒。不在・確認無反応による受付停止が5分続くと棄権し、残りは不戦敗になります。対戦中の切断猶予は1分。受付終了後、全組み合わせの結果確定で終了します。</p>
           <label>参加上限<input id="maxParticipants" type="number" min="2" max="10" value="10" required /></label>
-          <button type="submit" class="primary">この日程で設定</button>
+          <button id="scheduleBtn" type="button" class="primary">この日程で設定</button>
           <p class="note">山札通常・ペナルティ通常・合成数ありは標準設定のため、ルール名では省略します。</p>
           <p class="note">同じフォーマットIDを使うと、同形式の開催回として履歴をまとめられます。</p>
         </form>
@@ -69,12 +69,19 @@
             <button id="refreshBtn" type="button">更新</button>
           </div>
           <div id="runSummary" class="run-summary empty">大会は設定されていません。</div>
+          <button id="cancelTournamentBtn" type="button" hidden>この大会を中止</button>
           <div id="currentMatch" class="current-match empty">進行中の対戦はありません。</div>
           <h3>対戦一覧</h3>
           <div id="matchList" class="match-list"></div>
           <h3>順位</h3>
           <ol id="standings" class="standings"></ol>
         </section>
+      </section>
+
+      <section class="card">
+        <h2>予約一覧</h2>
+        <p class="note">開催日時順に1大会ずつ進行します。前の大会が長引いた場合は、受付時間を保って各時刻を繰り下げます。</p>
+        <div id="reservationList" class="history-list"></div>
       </section>
 
       <section class="card">
@@ -86,7 +93,14 @@
       </section>
 
       <section id="messageLog" class="message-log" aria-live="polite"></section>
+      <dialog id="cancelConfirmation" class="card" aria-labelledby="cancelConfirmationTitle">
+        <h2 id="cancelConfirmationTitle">大会中止の確認</h2>
+        <p id="cancelConfirmationText"></p>
+        <p>進行中の対局は終了まで待ち、新しい対局は開始しません。完了済みの試合結果は履歴に残ります。</p>
+        <button id="cancelConfirmBtn" type="button">この大会の中止を確定</button>
+        <button id="cancelBackBtn" type="button">戻る</button>
+      </dialog>
     </main>
-    <script src="./tournament-admin.js?v=hyakki-20261006-1"></script>
+    <script src="./tournament-admin.js?v=tournament-20261025-1"></script>
   </body>
 </html>

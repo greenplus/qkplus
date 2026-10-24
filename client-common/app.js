@@ -2733,6 +2733,7 @@ function renderTournament() {
   };
   el.tournamentTitle.textContent = tournament?.title || "定期大会";
   el.tournamentStatusBadge.textContent = statusLabels[tournament?.status] || "未開催";
+  if (tournament?.status === "running" && tournament.cancellation_requested_at) el.tournamentStatusBadge.textContent = "中止待ち";
   el.tournamentStatusBadge.dataset.status = tournament?.status || "unavailable";
   if (el.tournamentRuleSummary) {
     el.tournamentRuleSummary.textContent = tournament?.rule?.summary || "未設定";
@@ -2822,6 +2823,9 @@ function renderTournament() {
     el.tournamentTimingNote.textContent = `${tournament?.wins_required || 1}本先取。${tournament?.wins_required > 1 ? "初戦の先後はランダム、以降は勝敗に関係なく交代します。" : ""}対局は1手${turnSeconds}秒で、時間切れは自動パスです。${callPolicy} 切断した席の保持は対戦中${formatDuration(playingSeconds)}、ロビー待機中${formatDuration(waitingSeconds)}です。順位は試合勝利数→本数差→直接対決（同順位者間の試合勝利数→本数差）で決定。同順位者が残ればその人たちだけで再比較し、差がつかなければ同順位です。`;
   }
   renderTournamentAvailability();
+  if (tournament?.status === "running" && tournament.cancellation_requested_at && el.tournamentTimingNote) {
+    el.tournamentTimingNote.textContent = "大会中止を受け付けました。進行中の対局は終了まで続け、新しい対局は開始しません。";
+  }
 }
 
 function tournamentMatchLabel(match) {
