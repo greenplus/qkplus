@@ -260,7 +260,7 @@ textarea,
   padding: 0 12px;
 }
 
-.guest-mode-option {
+.publish-name-option {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -270,7 +270,7 @@ textarea,
   cursor: pointer;
 }
 
-.guest-mode-option input {
+.publish-name-option input {
   width: 16px;
   height: 16px;
   margin: 0;
@@ -304,7 +304,7 @@ textarea,
   margin-top: 8px;
 }
 
-.guest-mode-option:has(input:disabled) {
+.publish-name-option:has(input:disabled) {
   cursor: not-allowed;
   opacity: 0.65;
 }

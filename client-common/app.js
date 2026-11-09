@@ -33,10 +33,8 @@ const TOURNAMENT_TOKEN_KEY = "prime-daifugo-" + CONFIG.productKey + "-tournament
 const PLAYER_PROFILE_KEY = "primeqk_player_profile_v1";
 const LEGACY_ROOM_SESSION_TOKEN_KEY = "prime-daifugo-" + CONFIG.productKey + "-room-session-tokens";
 const ROOM_SESSION_TOKEN_KEY = LEGACY_ROOM_SESSION_TOKEN_KEY + "-v2";
-const GUEST_MODE_KEY = "prime-daifugo-" + CONFIG.productKey + "-guest-mode";
-const GUEST_NAME_KEY = "prime-daifugo-" + CONFIG.productKey + "-guest-name";
+const PUBLISH_NAME_KEY = "prime-daifugo-" + CONFIG.productKey + "-publish-name";
 const RECRUITMENT_OWNER_KEY = "prime-daifugo-" + CONFIG.productKey + "-recruitment-owner";
-const RECRUITMENT_GUEST_OWNER_KEY = RECRUITMENT_OWNER_KEY + "-guest";
 const PRACTICE_ACCESS_TOKEN_KEY = "prime-daifugo-" + CONFIG.productKey + "-practice-access-token";
 const REGISTERED_CUSTOMIZATION_KEY = "prime-daifugo-" + CONFIG.productKey + "-registered-customizations-v1";
 const CONNECTION_DIAGNOSTICS_KEY = "prime-daifugo-" + CONFIG.productKey + "-connection-diagnostics-v1";
@@ -51,7 +49,7 @@ const state = {
   connected: false,
   playerId: null,
   playerName: "",
-  guestMode: false,
+  publishName: false,
   roomJoined: false,
   appMode: "setup",
   roomState: "waiting",
@@ -81,7 +79,7 @@ const state = {
   recruitments: [],
   recruitmentMaxCount: 5,
   recruitmentSubmitPending: false,
-  recruitmentOwnerTokens: { main: "", guest: "" },
+  recruitmentOwnerToken: "",
   playingDisconnectGraceSeconds: 60,
   waitingDisconnectGraceSeconds: 60,
   roomRules: {},
@@ -225,7 +223,7 @@ function clearPracticeAccessToken() {
 }
 
 function authorizeCompositePractice(token) {
-  send({ type: "authorize_composite_practice", access_token: token });
+  send({ type: CONFIG.authMessageType || "authorize_composite_practice", access_token: token });
 }
 
 function updatePracticeAuthUi(message) {
@@ -233,6 +231,8 @@ function updatePracticeAuthUi(message) {
   const status = document.getElementById("practiceAuthStatus");
   if (gate) gate.classList.toggle("hidden", state.practiceAuthorized);
   document.body.classList.toggle("practice-locked", !state.practiceAuthorized);
+  const shell = document.querySelector(".app-shell");
+  if (shell && CONFIG.features.practiceAuth) shell.inert = !state.practiceAuthorized;
   if (status) status.textContent = message;
 }
 
@@ -275,30 +275,16 @@ function saveMainName(name) {
   }
 }
 
-function guestName() {
-  try {
-    return (sessionStorage.getItem(GUEST_NAME_KEY) || "").trim().slice(0, 24);
-  } catch {
-    return "";
-  }
-}
-
-function saveGuestName(name) {
-  try {
-    sessionStorage.setItem(GUEST_NAME_KEY, String(name || "").trim().slice(0, 24));
-  } catch {}
-}
-
 function initializeIdentityForm() {
   try {
-    state.guestMode = sessionStorage.getItem(GUEST_MODE_KEY) === "true";
+    state.publishName = sessionStorage.getItem(PUBLISH_NAME_KEY) === "true";
     // v1は端末内の全タブで共有されていたため、安全のため引き継がない。
     localStorage.removeItem(LEGACY_ROOM_SESSION_TOKEN_KEY);
   } catch {
-    state.guestMode = false;
+    state.publishName = false;
   }
-  el.guestModeToggle.checked = state.guestMode;
-  el.nameInput.value = state.guestMode ? guestName() : savedMainName();
+  el.publishNameToggle.checked = state.publishName;
+  el.nameInput.value = savedMainName();
   state.playerName = el.nameInput.value;
   updateIdentityModeUi();
 }
@@ -307,34 +293,21 @@ function persistCurrentName() {
   const name = el.nameInput.value.trim().slice(0, 24);
   el.nameInput.value = name;
   state.playerName = name;
-  if (state.guestMode) saveGuestName(name);
-  else saveMainName(name);
+  saveMainName(name);
 }
 
-function toggleGuestMode() {
-  if (state.roomJoined) {
-    el.guestModeToggle.checked = state.guestMode;
-    return;
-  }
-  persistCurrentName();
-  state.guestMode = el.guestModeToggle.checked;
+function togglePublishName() {
+  state.publishName = el.publishNameToggle.checked;
   try {
-    sessionStorage.setItem(GUEST_MODE_KEY, String(state.guestMode));
+    sessionStorage.setItem(PUBLISH_NAME_KEY, String(state.publishName));
   } catch {}
-  el.nameInput.value = state.guestMode ? guestName() : savedMainName();
-  state.playerName = el.nameInput.value;
   updateIdentityModeUi();
-  setRandomNameIfEmpty();
-  if (el.recruitmentName) el.recruitmentName.value = el.nameInput.value.trim();
-  requestRecruitments();
   renderAll();
 }
 
 function updateIdentityModeUi() {
   if (!el.identityModeNote) return;
-  el.identityModeNote.textContent = state.guestMode
-    ? "このタブ専用の名前を使います。保存済みの名前・復帰情報・大会参加権は使用しません。"
-    : "通常は保存済みの名前を使います。ゲストをオンにすると、このタブ専用の名前になり、保存済みの復帰情報・大会参加権は使いません。";
+  el.identityModeNote.textContent = "オフの場合、素数大富豪discordの入室通知は「誰か」になります。オンの場合は表示名を載せます。募集投稿・大会参加にはオンが必要です。対戦画面ではどちらも表示名を使います。";
 }
 
 function bindElements() {
@@ -351,7 +324,7 @@ function bindElements() {
     "registerPanel",
     "nameInput",
     "randomNameBtn",
-    "guestModeToggle",
+    "publishNameToggle",
     "identityModeNote",
     "roomGroupPrimaryBtn",
     "roomGroupSecondaryBtn",
@@ -521,7 +494,7 @@ function bindEvents() {
   el.randomNameBtn.addEventListener("click", setRandomName);
   el.nameInput.addEventListener("change", persistCurrentName);
   el.nameInput.addEventListener("blur", persistCurrentName);
-  el.guestModeToggle.addEventListener("change", toggleGuestMode);
+  el.publishNameToggle.addEventListener("change", togglePublishName);
   el.roomGroupPrimaryBtn.addEventListener("click", () => selectRoomGroup(primaryGroupKey));
   if (secondaryGroupKey) {
     el.roomGroupSecondaryBtn.addEventListener("click", () => selectRoomGroup(secondaryGroupKey));
@@ -958,6 +931,7 @@ function handleMessage(msg) {
     case "your_id":
       state.playerId = msg.id;
       break;
+    case "private_rooms_authorization":
     case "composite_practice_authorization":
       state.practiceAuthorized = !!msg.authorized;
       updatePracticeAuthUi(msg.message || "");
@@ -1078,7 +1052,7 @@ function handleMessage(msg) {
         el.nameInput.value = state.playerName;
         persistCurrentName();
       }
-      if (!state.guestMode && msg.resume_token && msg.tournament?.run_id) {
+      if (msg.resume_token && msg.tournament?.run_id) {
         saveTournamentResumeToken(msg.tournament.run_id, msg.resume_token);
       }
       setTournamentState(msg.tournament || state.tournament);
@@ -1086,7 +1060,7 @@ function handleMessage(msg) {
       break;
     case "tournament_session_conflict": {
       setTournamentState(msg.tournament || state.tournament);
-      const takeOver = !state.guestMode && window.confirm(
+      const takeOver = state.publishName && window.confirm(
         "同じ大会参加権が別のタブで使用中です。このタブへ参加権を引き継ぎますか？\n\nキャンセルすると、このタブでは観戦を続けます。",
       );
       if (takeOver) {
@@ -1455,7 +1429,7 @@ function readTournamentTokens() {
 }
 
 function tournamentResumeToken(runId) {
-  if (state.guestMode || !runId) return "";
+  if (!state.publishName || !runId) return "";
   return readTournamentTokens()[runId] || "";
 }
 
@@ -1511,8 +1485,8 @@ function removeRoomResumeToken(roomId) {
 
 function registerForTournament() {
   if (!state.roomJoined || !isTournamentRoom()) return;
-  if (state.guestMode) {
-    log("system", "ゲストモードでは大会を観戦できますが、参加登録はできません。通常モードへ戻してから入室し直してください。");
+  if (!state.publishName) {
+    log("system", "大会に参加するには、メニューで「名前を公開」をオンにしてください。");
     renderAll();
     return;
   }
@@ -1668,25 +1642,24 @@ function initializeRecruitmentForm() {
 }
 
 function recruitmentOwnerToken() {
-  const modeKey = state.guestMode ? "guest" : "main";
-  const storageKey = state.guestMode ? RECRUITMENT_GUEST_OWNER_KEY : RECRUITMENT_OWNER_KEY;
-  const storage = state.guestMode ? sessionStorage : localStorage;
+  const storageKey = RECRUITMENT_OWNER_KEY;
+  const storage = localStorage;
   try {
     const saved = storage.getItem(storageKey);
     if (saved && saved.length >= 32) return saved;
   } catch {}
-  if (!state.recruitmentOwnerTokens[modeKey]) {
+  if (!state.recruitmentOwnerToken) {
     const bytes = new Uint8Array(32);
     crypto.getRandomValues(bytes);
-    state.recruitmentOwnerTokens[modeKey] = Array.from(
+    state.recruitmentOwnerToken = Array.from(
       bytes,
       (value) => value.toString(16).padStart(2, "0"),
     ).join("");
   }
   try {
-    storage.setItem(storageKey, state.recruitmentOwnerTokens[modeKey]);
+    storage.setItem(storageKey, state.recruitmentOwnerToken);
   } catch {}
-  return state.recruitmentOwnerTokens[modeKey];
+  return state.recruitmentOwnerToken;
 }
 
 function requestRecruitments() {
@@ -1697,6 +1670,10 @@ function requestRecruitments() {
 function createRecruitment(event) {
   event.preventDefault();
   if (!CONFIG.features.recruitment || state.recruitmentSubmitPending) return;
+  if (!state.publishName) {
+    setRecruitmentStatus("募集を投稿するには「名前を公開」をオンにしてください。", "error");
+    return;
+  }
   const name = el.recruitmentName.value.trim().slice(0, 24);
   const scheduledAt = new Date(el.recruitmentTime.value);
   const now = new Date();
@@ -2554,7 +2531,7 @@ function renderAll() {
   el.roomPanel.classList.toggle("hidden", state.appMode === "setup");
   // Reveal the board before measuring card rows when a waiting player starts a game.
   renderGameVisibility();
-  el.guestModeToggle.disabled = state.roomJoined;
+  el.publishNameToggle.disabled = state.roomJoined;
   updateIdentityModeUi();
   renderSoundToggle();
   renderRoomChoice();
@@ -2702,7 +2679,8 @@ function renderRecruitments() {
   const ownsPost = posts.some((post) => post.can_delete);
   const boardFull = posts.length >= state.recruitmentMaxCount;
   el.recruitmentSubmitBtn.disabled = (
-    !state.connected
+    !state.publishName
+    || !state.connected
     || state.recruitmentSubmitPending
     || ownsPost
     || boardFull
@@ -2713,7 +2691,7 @@ function renderRecruitments() {
       ? "1件投稿済み"
       : boardFull
         ? "現在5件あります"
-        : "募集を投稿";
+        : !state.publishName ? "投稿には名前の公開が必要です" : "募集を投稿";
 }
 
 function renderTournament() {
@@ -2760,9 +2738,9 @@ function renderTournament() {
   const registrationOpen = tournament?.pairing_mode === "flexible"
     ? ["registration", "running"].includes(tournament.status) && Date.now() + state.serverOffsetMs < Date.parse(tournament.registration_closes_at)
     : tournament?.status === "registration";
-  el.tournamentRegisterBtn.disabled = state.guestMode || !registrationOpen || registered;
-  el.tournamentRegisterBtn.textContent = state.guestMode
-    ? "ゲストは観戦のみ"
+  el.tournamentRegisterBtn.disabled = !state.publishName || !registrationOpen || registered;
+  el.tournamentRegisterBtn.textContent = !state.publishName
+    ? "参加には名前の公開が必要です"
     : registered
       ? "参加登録済み"
       : "大会に参加登録";
@@ -3132,7 +3110,7 @@ function getPlayerJoinedAudio() {
 
 function getTurnEffectAudio(name) {
   if (!turnEffectAudios.has(name)) {
-    const audio = new Audio(`./assets/sounds/${name}.mp3`);
+    const audio = new Audio(`${CONFIG.soundAssetsBaseUrl || "./assets/sounds"}/${name}.mp3`);
     audio.preload = "auto";
     turnEffectAudios.set(name, audio);
   }
@@ -4166,6 +4144,9 @@ function sendChat() {
 }
 
 function send(payload) {
+  if (["join_room", "tournament_register", "create_recruitment"].includes(payload.type)) {
+    payload = { ...payload, publish_name: state.publishName };
+  }
   const gameAction = ["play_card", "draw_card", "pass"].includes(payload.type);
   if (gameAction) setActionError("");
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
