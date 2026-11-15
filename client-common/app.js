@@ -276,13 +276,23 @@ function saveMainName(name) {
 }
 
 function initializeIdentityForm() {
+  let preference = null;
   try {
-    state.publishName = sessionStorage.getItem(PUBLISH_NAME_KEY) === "true";
+    preference = localStorage.getItem(PUBLISH_NAME_KEY);
+  } catch {}
+  if (preference === null) {
+    try {
+      preference = sessionStorage.getItem(PUBLISH_NAME_KEY);
+      if (preference === "true" || preference === "false") {
+        localStorage.setItem(PUBLISH_NAME_KEY, preference);
+      }
+    } catch {}
+  }
+  try {
     // v1は端末内の全タブで共有されていたため、安全のため引き継がない。
     localStorage.removeItem(LEGACY_ROOM_SESSION_TOKEN_KEY);
-  } catch {
-    state.publishName = false;
-  }
+  } catch {}
+  state.publishName = preference === "true";
   el.publishNameToggle.checked = state.publishName;
   el.nameInput.value = savedMainName();
   state.playerName = el.nameInput.value;
@@ -299,8 +309,12 @@ function persistCurrentName() {
 function togglePublishName() {
   state.publishName = el.publishNameToggle.checked;
   try {
-    sessionStorage.setItem(PUBLISH_NAME_KEY, String(state.publishName));
-  } catch {}
+    localStorage.setItem(PUBLISH_NAME_KEY, String(state.publishName));
+  } catch {
+    try {
+      sessionStorage.setItem(PUBLISH_NAME_KEY, String(state.publishName));
+    } catch {}
+  }
   updateIdentityModeUi();
   renderAll();
 }
